@@ -10,6 +10,11 @@ imd2atr:
 Dave Dunfield's .IMD (ImageDisk) file format
 
 
+You could use these to read and write Atari 800 disks using an IBM PC floppy
+drive with ImageDisk.  Note however that the floppy drive should be adjusted
+for 288 RPM instead of 300 RPM.
+
+
 Compiling instructions:
 
 I use the DJGPP 32-bit GNU-C based compiler: http://www.delorie.com/djgpp/
