@@ -845,6 +845,7 @@ int main(int argc, char *argv[])
                 printf("      put local-name [atari-name]   Copy file to diskette to atari-name\n");
                 printf("      free                          Print amount of free space\n");
                 printf("      rm atari-name                 Delete a file\n");
+                printf("      check                         Check filesystem\n");
                 printf("\n");
                 return -1;
 	}

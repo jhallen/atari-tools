@@ -21,6 +21,7 @@ atr:
       put local-name [atari-name]   Copy file to diskette to mdos-name
       free                          Print amount of free space
       rm atari-name                 Delete a file
+      check                         Check filesystem
 
 
   For example:
