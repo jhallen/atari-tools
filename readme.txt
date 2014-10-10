@@ -15,7 +15,6 @@ atr:
                   -l for long
                   -a to show system files
                   -1 to show a single name per line
-                  -A show only ASCII files
       cat atari-name                Type file to console
       get atari-name [local-name]   Copy file from diskette to local-name
       put local-name [atari-name]   Copy file to diskette to mdos-name
