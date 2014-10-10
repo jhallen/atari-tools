@@ -1,3 +1,43 @@
+Joe's Atari Disk Tools
+
+atr:
+
+	Manipulate .atr disk image files:
+
+	Compile with: cc -o atr atr.c
+
+	Syntax: atr path-to-diskette command args
+
+  Commands:
+      ls [-la1A]                    Directory listing
+                  -l for long
+                  -a to show system files
+                  -1 to show a single name per line
+                  -A show only ASCII files
+      cat atari-name                Type file to console
+      get atari-name [local-name]   Copy file from diskette to local-name
+      put local-name [atari-name]   Copy file to diskette to mdos-name
+      free                          Print amount of free space
+      rm atari-name                 Delete a file
+
+
+  For example:
+
+	./atr dos2_0s.atr ls -al
+
+	-rw-s    694 (  6) autorun.sys   (load_start=$2800 load_end=$29db)
+	-rw--  31616 (253) choplift.exe  (load_start=$4500 load_end=$bfff)
+	-rw-s   4875 ( 39) dos.sys      
+	-rw--  19852 (159) frogger.exe   (load_start=$2480 load_end=$71ff)
+	-rw--  16739 (134) jumpjr.exe    (load_start=$1f00 load_end=$6056)
+
+	5 entries
+
+	591 sectors, 73776 bytes
+
+	116 free sectors, 14848 free bytes
+
+
 atr2imd:
 
 	Convert Nick Kennedy's .ATR (Atari) disk image file format to
