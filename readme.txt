@@ -5,6 +5,8 @@ atr:
 	Manipulate .atr disk image files:
 
 	Compile with: cc -o atr atr.c
+	This is for Cygwin or Linux (add 'b' flag to fopen()s for Windows I
+	think).
 
 	Syntax: atr path-to-diskette command args
 
