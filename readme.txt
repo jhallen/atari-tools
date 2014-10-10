@@ -2,24 +2,33 @@ Joe's Atari Disk Tools
 
 atr:
 
-	Manipulate .atr disk image files:
+	Manipulate .atr disk image files.  Allows you to read, write or
+delete files in .atr disk images.
+
+	Limitation: handles 90K disks only. This is for Cygwin or Linux (add
+	'b' flag to fopen()s for Windows I think).
 
 	Compile with: cc -o atr atr.c
-	This is for Cygwin or Linux (add 'b' flag to fopen()s for Windows I
-	think).
 
 	Syntax: atr path-to-diskette command args
 
   Commands:
+
       ls [-la1A]                    Directory listing
                   -l for long
                   -a to show system files
                   -1 to show a single name per line
+
       cat atari-name                Type file to console
+
       get atari-name [local-name]   Copy file from diskette to local-name
+
       put local-name [atari-name]   Copy file to diskette to mdos-name
+
       free                          Print amount of free space
+
       rm atari-name                 Delete a file
+
       check                         Check filesystem
 
 
