@@ -23,7 +23,7 @@ delete files in .atr disk images.
 
       get atari-name [local-name]   Copy file from diskette to local-name
 
-      put local-name [atari-name]   Copy file to diskette to mdos-name
+      put local-name [atari-name]   Copy file to diskette to atari-name
 
       free                          Print amount of free space
 
