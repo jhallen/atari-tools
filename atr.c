@@ -255,11 +255,11 @@ void cat(char *name)
 
 /* get a file from the disk */
 
-int get_file(char *mdos_name, char *local_name)
+int get_file(char *atari_name, char *local_name)
 {
-        int sector = find_file(mdos_name, 0);
+        int sector = find_file(atari_name, 0);
         if (sector == -1) {
-                printf("File '%s' not found\n", mdos_name);
+                printf("File '%s' not found\n", atari_name);
                 return -1;
         } else {
                 FILE *f = fopen(local_name, "w");
@@ -581,7 +581,7 @@ int write_dir(int fileno, char *name, int rib_sect, int sects)
 
 /* Put a file on the disk */
 
-int put_file(char *local_name, char *mdos_name)
+int put_file(char *local_name, char *atari_name)
 {
         FILE *f = fopen(local_name, "r");
         long size;
@@ -629,7 +629,7 @@ int put_file(char *local_name, char *mdos_name)
                 buf[x] = 0;
 
         /* Delete existing file */
-        rm(mdos_name, 1);
+        rm(atari_name, 1);
 
         /* Get cat... */
         getsect(cat, SECTOR_VTOC);
@@ -648,7 +648,7 @@ int put_file(char *local_name, char *mdos_name)
                 return -1;
         }
 
-        if (write_dir(fileno, mdos_name, rib_sect, up / (DATA_SIZE))) {
+        if (write_dir(fileno, atari_name, rib_sect, up / (DATA_SIZE))) {
                 printf("Couldn't write directory entry\n");
                 return -1;
         }
@@ -706,7 +706,7 @@ void get_info(struct name *nam)
         nam->size = total;
 }
 
-void mdos_dir(int all, int full, int single, int only_ascii)
+void atari_dir(int all, int full, int single)
 {
         unsigned char buf[SECTOR_SIZE];
         unsigned char rib[SECTOR_SIZE];
@@ -826,7 +826,6 @@ int main(int argc, char *argv[])
         int all = 0;
         int full = 0;
         int single = 0;
-        int only_ascii = 0;
 	int x;
 	char *disk_name;
 	x = 1;
@@ -843,7 +842,7 @@ int main(int argc, char *argv[])
                 printf("                  -A show only ASCII files\n");
                 printf("      cat atari-name                Type file to console\n");
                 printf("      get atari-name [local-name]   Copy file from diskette to local-name\n");
-                printf("      put local-name [atari-name]   Copy file to diskette to mdos-name\n");
+                printf("      put local-name [atari-name]   Copy file to diskette to atari-name\n");
                 printf("      free                          Print amount of free space\n");
                 printf("      rm atari-name                 Delete a file\n");
                 printf("\n");
@@ -866,7 +865,6 @@ int main(int argc, char *argv[])
 	                        case 'l': full = 1; break;
 	                        case 'a': all = 1; break;
 	                        case '1': single = 1; break;
-	                        case 'A': only_ascii = 1; break;
 	                        default: printf("Unknown option '%c'\n", opt); return -1;
 	                }
 	        }
@@ -875,7 +873,7 @@ int main(int argc, char *argv[])
 
 	if (x == argc) {
 	        /* Just print a directory listing */
-	        mdos_dir(all, full, single, only_ascii);
+	        atari_dir(all, full, single);
 	        return 0;
         } else if (!strcmp(argv[x], "ls")) {
                 ++x;
@@ -895,20 +893,20 @@ int main(int argc, char *argv[])
 	        }
 	} else if (!strcmp(argv[x], "get")) {
                 char *local_name;
-                char *mdos_name;
+                char *atari_name;
                 ++x;
                 if (x == argc) {
                         printf("Missing file name to get\n");
                         return -1;
                 }
-                mdos_name = argv[x];
-                local_name = mdos_name;
+                atari_name = argv[x];
+                local_name = atari_name;
                 if (x + 1 != argc)
                         local_name = argv[++x];
-                return get_file(mdos_name, local_name);
+                return get_file(atari_name, local_name);
         } else if (!strcmp(argv[x], "put")) {
                 char *local_name;
-                char *mdos_name;
+                char *atari_name;
                 ++x;
                 if (x == argc) {
                         printf("Missing file name to put\n");
@@ -916,13 +914,13 @@ int main(int argc, char *argv[])
                 }
                 local_name = argv[x];
                 if (strrchr(local_name, '/'))
-                        mdos_name = strrchr(local_name, '/') + 1;
+                        atari_name = strrchr(local_name, '/') + 1;
                 else
-                        mdos_name = local_name;
-                printf("%s\n", mdos_name);
+                        atari_name = local_name;
+                printf("%s\n", atari_name);
                 if (x + 1 != argc)
-                        mdos_name = argv[++x];
-                return put_file(local_name, mdos_name);
+                        atari_name = argv[++x];
+                return put_file(local_name, atari_name);
         } else if (!strcmp(argv[x], "rm")) {
                 char *name;
                 ++x;
