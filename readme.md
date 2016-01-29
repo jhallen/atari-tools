@@ -1,5 +1,11 @@
 # Atari Disk Tools
 
+Use atr to manipulate .atr disk image files.
+
+Use atr2imd and imd2atr to convert between .atr disk images and .img disk
+images.  These are useful if you are trying to read Atari disks on an IBM PC
+using ImageDisk.
+
 ## atr
 
 Manipulate .atr disk image files.  Allows you to read, write or
@@ -83,7 +89,7 @@ I use the DJGPP 32-bit GNU-C based compiler: http://www.delorie.com/djgpp/
 
 Then I use CWSDPMI as the DOS extender: http://homer.rice.edu/~sandmann/cwsdpmi/index.html
 
-This allows the programs<br>to run in plain MS-DOS or under Windows (the DOS
+This allows the programs to run in plain MS-DOS or under Windows (the DOS
 extender disables itself if it sees the DPMI provided by Windows):
 
 	exe2coff imd2atr.exe
