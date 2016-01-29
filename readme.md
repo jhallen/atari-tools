@@ -1,18 +1,24 @@
-Joe's Atari Disk Tools
+# Joe's Atari Disk Tools
 
-atr:
+## atr
 
-	Manipulate .atr disk image files.  Allows you to read, write or
+Manipulate .atr disk image files.  Allows you to read, write or
 delete files in .atr disk images.
 
-	Limitation: handles 90K disks only. This is for Cygwin or Linux (add
-	'b' flag to fopen()s for Windows I think).
+### Limitations
 
-	Compile with: cc -o atr atr.c
+Handles 90K disks only.  This is for Cygwin or Linux (add 'b' flag to
+fopen()s for Windows I think).
 
-	Syntax: atr path-to-diskette command args
+### Compile
 
-  Commands:
+	cc -o atr atr.c
+
+### Syntax
+
+	atr path-to-diskette command args
+
+### Commands
 
       ls [-la1A]                    Directory listing
                   -l for long
@@ -32,7 +38,7 @@ delete files in .atr disk images.
       check                         Check filesystem
 
 
-  For example:
+For example:
 
 	./atr dos2_0s.atr ls -al
 
@@ -49,15 +55,15 @@ delete files in .atr disk images.
 	116 free sectors, 14848 free bytes
 
 
-atr2imd:
+## atr2imd
 
-	Convert Nick Kennedy's .ATR (Atari) disk image file format to
+Convert Nick Kennedy's .ATR (Atari) disk image file format to
 Dave Dunfield's .IMD (ImageDisk) file format
 
 
-imd2atr:
+## imd2atr
 
-	Convert Nick Kennedy's .ATR (Atari) disk image file format to
+Convert Nick Kennedy's .ATR (Atari) disk image file format to
 Dave Dunfield's .IMD (ImageDisk) file format
 
 
@@ -66,7 +72,7 @@ drive with ImageDisk.  Note however that the floppy drive should be adjusted
 for 288 RPM instead of 300 RPM.
 
 
-Compiling instructions:
+### Compiling instructions
 
 I use the DJGPP 32-bit GNU-C based compiler: http://www.delorie.com/djgpp/
 (so you need a 386 or better machine to run these on)
@@ -77,7 +83,7 @@ I use the DJGPP 32-bit GNU-C based compiler: http://www.delorie.com/djgpp/
 
 Then I use CWSDPMI as the DOS extender: http://homer.rice.edu/~sandmann/cwsdpmi/index.html
 
-This allows the programs to run in plain MS-DOS or under Windows (the DOS
+This allows the programs<br>to run in plain MS-DOS or under Windows (the DOS
 extender disables itself if it sees the DPMI provided by Windows):
 
 	exe2coff imd2atr.exe
