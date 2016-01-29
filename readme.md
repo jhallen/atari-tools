@@ -1,4 +1,4 @@
-# Joe's Atari Disk Tools
+# Atari Disk Tools
 
 ## atr
 
