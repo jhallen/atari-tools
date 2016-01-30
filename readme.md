@@ -13,8 +13,9 @@ delete files in .atr disk images.
 
 ### Limitations
 
-Handles 90K disks only.  This is for Cygwin or Linux (add 'b' flag to
-fopen()s for Windows I think).
+Handles DOS 2.0S single density 90K disks and DOS 2.5 enhanced density 130K
+disks only.  This is for Cygwin or Linux (add 'b' flag to fopen()s for
+Windows I think).
 
 ### Compile
 

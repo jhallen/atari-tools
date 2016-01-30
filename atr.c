@@ -22,15 +22,62 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* Disk size in sectors */
-#define DISK_SIZE 720
+/* Disks: .ATR file has a 16 byte header, then data:
+ *
+ *  DOS 2.0S single density (40 tracks, 18 sectors, 128 byte sectors): 92160 = 90KB
+ *     There is no sector 0.
+ *     Boot sectors = 1..3
+ *     VTOC sector = 360 (0x168)
+ *     Directory sectors = 361..368 (0x169..0x170)
+ *     Out of reach sector = 720
+ *
+ *     VTOC:
+ *         0: Dos code.  2 for Atari DOS
+ *      1..2: Total sectors in a disk 0..707 (excluding boot, directory, VTOC and out of reach)
+ *      3..4: Total number of free sectors 0..707
+ *      5..9: unused
+ *    10..99: bitmap for sectors 0..719.  0 means in use.  Sector 0 doesn't exist.
+ *   100-127: unused
+ *
+ *    Directory entry:
+ *         0: flag byte (0 means unused, 0x42 means in use)
+ *             bit 0: opened for output
+ *             bit 1: created by dos 2
+ *             bit 5: file locked
+ *             bit 6: file in use
+ *             bit 7: file deleted
+ *      1..2: number of sectors in file
+ *      3..4: starting sector number
+ *     5..12: 8 byte file name
+ *    13..15: 3 byte extension
+ *     
+ *  DOS 2.5 Enhanced density (40 tracks, 26 sectors, 128 byte sectors): 133120 = 130KB
+ *     There is no sector 0
+ *     Boot sectors = 1..3
+ *     VTOC sector = 360 (0x168)
+ *     Directory sectors = 361..368
+ *     VTOC2 = 1024 (has more bitmap bits)
+ *     Out of reach sectors = 1025..1040 (unused because next sector number is 10 bits).
+ *
+ *     VTOC2: (VTOC is the same as on 90K disks)
+ *         0..83: Repeat VTOC bitmap for sectors 48..719 (write these, do not read them)
+ *       84..121: Bitmap for sectors 720..1023
+ *      122..123: Number of free sectors above sector 719.  Should be 304 on a new disk.
+ *      124..127: Unused.
+ */
 
 /* Sector size in bytes */
 #define SECTOR_SIZE 128
 
+/* Largest reachable sector + 1 */
+int disk_size = 720;
+#define SD_DISK_SIZE 720
+#define ED_DISK_SIZE 1024
+
 /* Specific sectors */
 
 #define SECTOR_VTOC 0x168 /* VTOC / free space bitmap */
+#define SECTOR_VTOC2 0x400 /* VTOC2 */
 #define SECTOR_DIR 0x169 /* First directory sector */
 
 /* Number of directory sectors */
@@ -64,9 +111,9 @@ struct dirent {
 #define DATA_SIZE 125
 
 /* Byte 125 has file number in upper 6 bites */
-#define DATA_FILE_NUM 125 /* Upper 6 bits */
+#define DATA_FILE_NUM 125 /* Upper 6 bits (0..63) */
 
-/* Byte 125 and 126 have next sector number */
+/* Byte 125 and 126 have next sector number: valid values (1..719) or (1..1023) */
 #define DATA_NEXT_HIGH 125 /* Lower 2 bits */
 #define DATA_NEXT_LOW 126 /* All 8 bits */
 
@@ -92,6 +139,14 @@ struct dirent {
      First real sector is sector 1.
 */
 
+#define VTOC2_BITMAP 84
+
+/* Size of bitmap */
+#define SD_CAT_SIZE 90
+#define ED_CAT_SIZE 128
+
+#define ED_CAT_START 6
+
 /* Bytes 100 - 127 unused */
 
 FILE *disk;
@@ -116,6 +171,44 @@ void putsect(unsigned char *buf, int sect)
         sect -= 1;
         fseek(disk, sect * SECTOR_SIZE + 16, SEEK_SET);
         fwrite((char *)buf, SECTOR_SIZE, 1, disk);
+}
+
+/* Get allocation bitmap */
+
+void getcat(unsigned char *cat)
+{
+        unsigned char vtoc[SECTOR_SIZE];
+        unsigned char vtoc2[SECTOR_SIZE];
+        if (disk_size == ED_DISK_SIZE) {
+                getsect(vtoc, SECTOR_VTOC);
+                getsect(vtoc2, SECTOR_VTOC2);
+                memcpy(cat, vtoc + VTOC_BITMAP, SD_CAT_SIZE);
+                memcpy(cat + SD_CAT_SIZE, vtoc2 + VTOC2_BITMAP, ED_CAT_SIZE - SD_CAT_SIZE);
+        } else {
+                getsect(vtoc, SECTOR_VTOC);
+                memcpy(cat, vtoc + VTOC_BITMAP, SD_CAT_SIZE);
+        }
+}
+
+/* Write back allocation bitmap */
+
+void putcat(unsigned char *cat)
+{
+        unsigned char vtoc[SECTOR_SIZE];
+        unsigned char vtoc2[SECTOR_SIZE];
+        if (disk_size == ED_DISK_SIZE) {
+                getsect(vtoc, SECTOR_VTOC);
+                getsect(vtoc2, SECTOR_VTOC2);
+                memcpy(cat + SD_CAT_SIZE, vtoc2 + VTOC2_BITMAP, ED_CAT_SIZE - SD_CAT_SIZE);
+                memcpy(vtoc + VTOC_BITMAP, cat, SD_CAT_SIZE);
+                memcpy(vtoc2, cat + ED_CAT_START, ED_CAT_SIZE - ED_CAT_START);
+                putsect(vtoc, SECTOR_VTOC);
+                putsect(vtoc2, SECTOR_VTOC2);
+        } else {
+                getsect(vtoc, SECTOR_VTOC);
+                memcpy(vtoc + VTOC_BITMAP, cat, SD_CAT_SIZE);
+                putsect(vtoc, SECTOR_VTOC);
+        }
 }
 
 int lower(int c)
@@ -233,14 +326,6 @@ void read_file(int sector, FILE *f)
                 file_no = ((buf[DATA_FILE_NUM] >> 2) & 0x3F);
                 bytes = buf[DATA_BYTES];
 
-//                bytes = (buf[DATA_BYTES] & 0x7F); /* Correct for 256 byte sectors? */
-#if 0
-                if (buf[DATA_SHORT] & 0x80)
-                        short_sect = 1;
-                else
-                        short_sect = 0;
-#endif
-
                 // printf("Sector %d: next=%d, bytes=%d, file_no=%d, short=%d\n",
                 //        sector, next, bytes, file_no, short_sect);
 
@@ -293,9 +378,9 @@ int get_file(char *atari_name, char *local_name)
 void mark_space(unsigned char *cat, int start, int alloc)
 {
         if (alloc) {
-                cat[10 + (start >> 3)] &= ~(1 << (7 - (start & 7)));
+                cat[start >> 3] &= ~(1 << (7 - (start & 7)));
         } else {
-                cat[10 + (start >> 3)] |= (1 << (7 - (start & 7)));
+                cat[start >> 3] |= (1 << (7 - (start & 7)));
         }
 }
 
@@ -303,15 +388,14 @@ void mark_space(unsigned char *cat, int start, int alloc)
 
 int del_file(int sector)
 {
-        unsigned char cat[SECTOR_SIZE];
-        getsect(cat, SECTOR_VTOC);
+        unsigned char cat[ED_CAT_SIZE];
+        getcat(cat);
 
         do {
                 unsigned char buf[SECTOR_SIZE];
                 int next;
                 int file_no;
                 int bytes;
-                int short_sect = 0;
 
                 getsect(buf, sector);
 
@@ -326,7 +410,7 @@ int del_file(int sector)
                 sector = next;
         } while(sector);
 
-        putsect(cat, SECTOR_VTOC);
+        putcat(cat);
         return 0;
 }
 
@@ -355,8 +439,8 @@ int amount_free(unsigned char *cat)
         int total = 0;
         int x;
 
-        for (x = 0; x != DISK_SIZE; ++x) {
-                if (cat[10 + (x >> 3)] & (1 << (7 - (x & 7))))
+        for (x = 0; x != disk_size; ++x) {
+                if (cat[(x >> 3)] & (1 << (7 - (x & 7))))
                         ++total;
         }
         return total;
@@ -367,8 +451,8 @@ int amount_free(unsigned char *cat)
 int do_free(void)
 {
         int amount;
-        unsigned char cat[SECTOR_SIZE];
-        getsect(cat, SECTOR_VTOC);
+        unsigned char cat[ED_CAT_SIZE];
+        getcat(cat);
         amount = amount_free(cat);
         printf("%d free sectors, %d free bytes\n", amount, amount * SECTOR_SIZE);
         return 0;
@@ -378,20 +462,21 @@ int do_free(void)
 
 int do_check()
 {
+        unsigned char cat[ED_CAT_SIZE];
         unsigned char buf[SECTOR_SIZE];
         unsigned char fbuf[SECTOR_SIZE];
         int x, y;
         int total;
-        char map[DISK_SIZE];
-        char *name[DISK_SIZE];
+        char map[ED_DISK_SIZE];
+        char *name[ED_DISK_SIZE];
 
         /* Mark all as free */
-        for (x = 0; x != DISK_SIZE; ++x) {
+        for (x = 0; x != disk_size; ++x) {
                 map[x] = -1;
                 name[x] = 0;
         }
 
-        /* Mark sector we can't reach as allocated */
+        /* Mark non-existent sector 0 as allocated */
         map[0] = 64;
 
         /* Mark VTOC and DIR */
@@ -458,7 +543,7 @@ int do_check()
                 }
         }
         total = 0;
-        for (x = 0; x != DISK_SIZE; ++x) {
+        for (x = 0; x != disk_size; ++x) {
                 if (map[x] != -1) {
                         ++total;
 //                        if (map[x] == 64)
@@ -468,13 +553,13 @@ int do_check()
 //                        }
                 }
         }
-        printf("%d sectors in use, %d sectors free\n", total, DISK_SIZE - total);
+        printf("%d sectors in use, %d sectors free\n", total, disk_size - total);
 
         printf("Checking VTOC...\n");
-        getsect(buf, SECTOR_VTOC);
-        for (x = 0; x != DISK_SIZE; ++x) {
+        getcat(cat);
+        for (x = 0; x != disk_size; ++x) {
                 int is_alloc;
-                if (buf[10 + (x >> 3)] & (1 << (7 - (x & 7))))
+                if (cat[x >> 3] & (1 << (7 - (x & 7))))
                         is_alloc = 0;
                 else
                         is_alloc = 1;
@@ -495,14 +580,14 @@ int alloc_space(unsigned char *cat, int *list, int sects)
 {
         while (sects) {
                 int x;
-                for (x = 1; x != DISK_SIZE; ++x) {
-                        if (cat[10 + (x >> 3)] & (1 << (7 - (x & 7)))) {
+                for (x = 1; x != disk_size; ++x) {
+                        if (cat[x >> 3] & (1 << (7 - (x & 7)))) {
                                 *list++ = x;
-                                cat[10 + (x >> 3)] &= ~(1 << (7 - (x & 7)));
+                                cat[x >> 3] &= ~(1 << (7 - (x & 7)));
                                 break;
                         }
                 }
-                if (x == DISK_SIZE) {
+                if (x == disk_size) {
                         printf("Not enough space\n");
                         return -1;
                 }
@@ -518,7 +603,7 @@ int write_file(unsigned char *cat, char *buf, int sects, int fileno, int size)
         int x;
         int rib_sect;
         unsigned char bf[SECTOR_SIZE];
-        int list[DISK_SIZE];
+        int list[ED_DISK_SIZE];
         memset(list, 0, sizeof(list));
 
         if (alloc_space(cat, list, sects))
@@ -599,7 +684,7 @@ int put_file(char *local_name, char *atari_name)
         long up;
         long x;
         unsigned char *buf;
-        unsigned char cat[SECTOR_SIZE];
+        unsigned char cat[ED_CAT_SIZE];
         int rib_sect;
         int fileno;
         if (!f) {
@@ -643,7 +728,7 @@ int put_file(char *local_name, char *atari_name)
         rm(atari_name, 1);
 
         /* Get cat... */
-        getsect(cat, SECTOR_VTOC);
+        getcat(cat);
 
         /* Prepare directory entry */
         fileno = find_empty_entry();
@@ -665,7 +750,7 @@ int put_file(char *local_name, char *atari_name)
         }
 
         /* Success! */
-        putsect(cat, SECTOR_VTOC);
+        putcat(cat);
         return 0;
 }
 
@@ -837,6 +922,7 @@ int main(int argc, char *argv[])
         int all = 0;
         int full = 0;
         int single = 0;
+        long size;
 	int x;
 	char *disk_name;
 	x = 1;
@@ -864,6 +950,23 @@ int main(int argc, char *argv[])
 	disk = fopen(disk_name, "r+");
 	if (!disk) {
 	        printf("Couldn't open '%s'\n", disk_name);
+	        return -1;
+	}
+	if (fseek(disk, 0, SEEK_END)) {
+	        printf("Couldn't seek disk?\n");
+	        return -1;
+	}
+	size = ftell(disk);
+	if (size - 16 == 40 * 18 * 128) {
+	        /* printf("Single density DOS 2.0S disk assumed\n"); */
+	        disk_size = SD_DISK_SIZE;
+	} else if (size - 16 == 40 * 26 * 128) {
+	        /* printf("Enhanced density DOS 2.5 disk assumed\n"); */
+	        disk_size = ED_DISK_SIZE;
+	} else {
+	        printf("Unknown disk size.  Expected:\n");
+	        printf("  16 + 40*18*128 = 92,176 bytes for DOS 2.0S single density\n");
+	        printf("  16 + 40*26*128 = 133,136 bytes for DOS 2.5 enhanced density\n");
 	        return -1;
 	}
 
