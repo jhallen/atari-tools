@@ -22,14 +22,18 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* Disk size in sectors */
 #define DISK_SIZE 720
 
+/* Sector size in bytes */
 #define SECTOR_SIZE 128
 
 /* Specific sectors */
 
-#define SECTOR_VTOC 0x168
-#define SECTOR_DIR 0x169
+#define SECTOR_VTOC 0x168 /* VTOC / free space bitmap */
+#define SECTOR_DIR 0x169 /* First directory sector */
+
+/* Number of directory sectors */
 #define SECTOR_DIR_SIZE 8
 
 /* Directory entry */
@@ -51,16 +55,23 @@ struct dirent {
 	unsigned char suffix[3];
 };
 
+/* Size of a directory entry */
+#define ENTRY_SIZE 16
+
 /* Bytes within data sectors */
 
-#define DATA_SIZE 125 /* Normal size of data sectors */
+/* First 125 bytes are used for data */
+#define DATA_SIZE 125
 
-#define DATA_NUM_USED 125
+/* Byte 125 has file number in upper 6 bites */
 #define DATA_FILE_NUM 125 /* Upper 6 bits */
+
+/* Byte 125 and 126 have next sector number */
 #define DATA_NEXT_HIGH 125 /* Lower 2 bits */
 #define DATA_NEXT_LOW 126 /* All 8 bits */
-#define DATA_BYTES 127 /* Lower 7 bits */
-#define DATA_SHORT 127 /* bit 7 set for short sector */
+
+/* Byte 127 has number of bytes used */
+#define DATA_BYTES 127
 
 /* Bytes within VTOC */
 
@@ -135,7 +146,7 @@ struct name
         int size;
 };
 
-struct name *names[(SECTOR_DIR_SIZE * SECTOR_SIZE) / sizeof(struct dirent)];
+struct name *names[(SECTOR_DIR_SIZE * SECTOR_SIZE) / ENTRY_SIZE];
 int name_n;
 
 int comp(struct name **l, struct name **r)
@@ -152,10 +163,10 @@ int find_empty_entry()
         for (x = SECTOR_DIR; x != SECTOR_DIR + SECTOR_DIR_SIZE; ++x) {
                 int y;
                 getsect(buf, x);
-                for (y = 0; y != SECTOR_SIZE; y += sizeof(struct dirent)) {
+                for (y = 0; y != SECTOR_SIZE; y += ENTRY_SIZE) {
                         struct dirent *d = (struct dirent *)(buf + y);
                         if (!(d->flag & FLAG_IN_USE)) {
-                                return ((x - SECTOR_DIR) / sizeof(struct dirent)) + (y / sizeof(struct dirent));
+                                return (x - SECTOR_DIR) * SECTOR_SIZE / ENTRY_SIZE + (y / ENTRY_SIZE);
                         }
                 }
         }
@@ -172,7 +183,7 @@ int find_file(char *filename, int del)
         for (x = SECTOR_DIR; x != SECTOR_DIR + SECTOR_DIR_SIZE; ++x) {
                 int y;
                 getsect(buf, x);
-                for (y = 0; y != SECTOR_SIZE; y += sizeof(struct dirent)) {
+                for (y = 0; y != SECTOR_SIZE; y += ENTRY_SIZE) {
                         struct dirent *d = (struct dirent *)(buf + y);
                         if (d->flag & FLAG_IN_USE) {
                                 char s[50];
@@ -397,7 +408,7 @@ int do_check()
         for (x = SECTOR_DIR; x != SECTOR_DIR + SECTOR_DIR_SIZE; ++x) {
                 int y;
                 getsect(buf, x);
-                for (y = 0; y != SECTOR_SIZE; y += sizeof(struct dirent)) {
+                for (y = 0; y != SECTOR_SIZE; y += ENTRY_SIZE) {
                         struct dirent *d = (struct dirent *)(buf + y);
                         if (d->flag & FLAG_IN_USE) {
                                 char s[50];
@@ -407,7 +418,7 @@ int do_check()
                                 int sector;
                                 int sects;
                                 int count = 0;
-                                int fileno = (y / sizeof(struct dirent)) + ((x - SECTOR_DIR) * SECTOR_SIZE / sizeof(struct dirent));
+                                int fileno = (y / ENTRY_SIZE) + ((x - SECTOR_DIR) * SECTOR_SIZE / ENTRY_SIZE);
                                 char *filename;
                                 for (i = 0; i != sizeof(d->name); i++) {
                                         s[p++] = lower(d->name[i]);
@@ -573,9 +584,9 @@ int write_dir(int fileno, char *name, int rib_sect, int sects)
         d->count_lo = sects;
         d->flag = FLAG_IN_USE;
         
-        getsect(dir_buf, SECTOR_DIR + fileno / (SECTOR_SIZE / sizeof(struct dirent)));
-        memcpy(dir_buf + sizeof(struct dirent) * (fileno % (SECTOR_SIZE / sizeof(struct dirent))), d, sizeof(struct dirent));
-        putsect(dir_buf, SECTOR_DIR + fileno / (SECTOR_SIZE / sizeof(struct dirent)));
+        getsect(dir_buf, SECTOR_DIR + fileno / (SECTOR_SIZE / ENTRY_SIZE));
+        memcpy(dir_buf + ENTRY_SIZE * (fileno % (SECTOR_SIZE / ENTRY_SIZE)), d, ENTRY_SIZE);
+        putsect(dir_buf, SECTOR_DIR + fileno / (SECTOR_SIZE / ENTRY_SIZE));
         return 0;
 }
 
@@ -716,7 +727,7 @@ void atari_dir(int all, int full, int single)
         for (x = SECTOR_DIR; x != SECTOR_DIR + SECTOR_DIR_SIZE; ++x) {
                 int y;
                 getsect(buf, x);
-                for (y = 0; y != SECTOR_SIZE; y += sizeof(struct dirent)) {
+                for (y = 0; y != SECTOR_SIZE; y += ENTRY_SIZE) {
                         struct dirent *d = (struct dirent *)(buf + y);
                         if (d->flag & FLAG_IN_USE) {
                                 struct name *nam;
@@ -812,7 +823,7 @@ void atari_dir(int all, int full, int single)
                                 int n = y + x * rows;
                                 /* printf("%11d  ", n); */
                                 if (n < name_n)
-                                        printf("%-11s  ", names[n]->name);
+                                        printf("%-12s  ", names[n]->name);
                                 else
                                         printf("             ");
                         }
