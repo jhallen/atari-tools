@@ -214,14 +214,19 @@ void getbitmap(unsigned char *bitmap, int check)
                 int count = count_free(bitmap, SD_BITMAP_SIZE);
                 int vtoc_count = vtoc[VTOC_NUM_UNUSED] + (256 * vtoc[VTOC_NUM_UNUSED + 1]);
                 int vtoc_total = vtoc[VTOC_NUM_SECTS] + (256 * vtoc[VTOC_NUM_SECTS + 1]);
+                int expected_size;
                 printf("Checking that VTOC unused count matches bitmap...\n");
                 if (count != vtoc_count) {
                         printf("  ** It doesn't match: bitmap has %d free, but VTOC count is %d\n", count, vtoc_count);
                 } else {
                         printf("  It's OK (count is %d)\n", count);
                 }
-                printf("Checking that VTOC total number of sectors is 707...\n");
-                if (vtoc_total != 707)
+                if (disk_size == ED_DISK_SIZE)
+                        expected_size = 1010;
+                else
+                        expected_size = 7070;
+                printf("Checking that VTOC usable sector count is %d...\n", expected_size);
+                if (vtoc_total != expected_size)
                         printf("  ** It's wrong, we found: %d\n", vtoc_total);
                 else
                         printf("  It's OK\n");
