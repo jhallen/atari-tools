@@ -158,6 +158,8 @@ struct dirent {
  *  VTOC2 has bytes 6 - 127 and is located at offset 0 within the VTOC2 sector
  */
 
+#define VTOC2_NUM_UNUSED 122
+
 FILE *disk;
 
 void getsect(unsigned char *buf, int sect)
@@ -182,15 +184,53 @@ void putsect(unsigned char *buf, int sect)
         fwrite((char *)buf, SECTOR_SIZE, 1, disk);
 }
 
+/* Count number of free sectors in a bitmap */
+
+int count_free(unsigned char *bitmap, int len)
+{
+        int count = 0;
+        int x;
+        while (len--) {
+                for (x = 1; x != 256; x *= 2) {
+                        if (*bitmap & x)
+                                ++count;
+                }
+                ++bitmap;
+        }
+        return count;
+}
+
 /* Get allocation bitmap */
 
-void getbitmap(unsigned char *bitmap)
+void getbitmap(unsigned char *bitmap, int check)
 {
         unsigned char vtoc[SECTOR_SIZE];
         unsigned char vtoc2[SECTOR_SIZE];
 
         getsect(vtoc, SECTOR_VTOC);
         memcpy(bitmap, vtoc + VTOC_BITMAP, SD_BITMAP_SIZE);
+
+        if (check) {
+                int count = count_free(bitmap, SD_BITMAP_SIZE);
+                int vtoc_count = vtoc[VTOC_NUM_UNUSED] + (256 * vtoc[VTOC_NUM_UNUSED + 1]);
+                int vtoc_total = vtoc[VTOC_NUM_SECTS] + (256 * vtoc[VTOC_NUM_SECTS + 1]);
+                printf("Checking that VTOC unused count matches bitmap...\n");
+                if (count != vtoc_count) {
+                        printf("  ** It doesn't match: bitmap has %d free, but VTOC count is %d\n", count, vtoc_count);
+                } else {
+                        printf("  It's OK (count is %d)\n", count);
+                }
+                printf("Checking that VTOC total number of sectors is 707...\n");
+                if (vtoc_total != 707)
+                        printf("  ** It's wrong, we found: %d\n", vtoc_total);
+                else
+                        printf("  It's OK\n");
+                printf("Checking that VTOC type code code is 2...\n");
+                if (vtoc[VTOC_TYPE] == 2)
+                        printf("  It's OK\n");
+                else
+                        printf("  ** It's wrong, we found: %d\n", vtoc[VTOC_TYPE]);
+        }
 
         if (disk_size == ED_DISK_SIZE) {
                 getsect(vtoc2, SECTOR_VTOC2);
@@ -199,6 +239,16 @@ void getbitmap(unsigned char *bitmap)
                         vtoc2 + (SD_BITMAP_SIZE - ED_BITMAP_START),
                         ED_BITMAP_SIZE - SD_BITMAP_SIZE
                 );
+                if (check) {
+                        int count = count_free(bitmap + SD_BITMAP_SIZE, ED_BITMAP_SIZE - SD_BITMAP_SIZE);
+                        int vtoc2_count = vtoc2[VTOC2_NUM_UNUSED] + 256 * vtoc2[VTOC2_NUM_UNUSED + 1];
+                        printf("Checking that VTOC2 unused count matches bitmap...\n");
+                        if (count != vtoc2_count) {
+                                printf("  ** It doesn't match: bitmap has %d free, but VTOC2 count is %d\n", count, vtoc2_count);
+                        } else {
+                                printf("  It's OK (count is %d)\n", count);
+                        }
+                }
         }
 }
 
@@ -207,15 +257,28 @@ void getbitmap(unsigned char *bitmap)
 void putbitmap(unsigned char *bitmap)
 {
         unsigned char vtoc[SECTOR_SIZE];
+        int count;
         unsigned char vtoc2[SECTOR_SIZE];
 
         getsect(vtoc, SECTOR_VTOC);
         memcpy(vtoc + VTOC_BITMAP, bitmap, SD_BITMAP_SIZE);
+
+        /* Update free count */
+        count = count_free(bitmap, SD_BITMAP_SIZE);
+        vtoc[VTOC_NUM_UNUSED] = count;
+        vtoc[VTOC_NUM_UNUSED + 1] = (count >> 8);
+
         putsect(vtoc, SECTOR_VTOC);
 
         if (disk_size == ED_DISK_SIZE) {
                 getsect(vtoc2, SECTOR_VTOC2);
                 memcpy(vtoc2, bitmap + ED_BITMAP_START, ED_BITMAP_SIZE - ED_BITMAP_START);
+
+                /* Update free count */
+                count = count_free(bitmap + SD_BITMAP_SIZE, ED_BITMAP_SIZE - SD_BITMAP_SIZE);
+                vtoc2[VTOC2_NUM_UNUSED] = count;
+                vtoc2[VTOC2_NUM_UNUSED + 1] = (count >> 8);
+
                 putsect(vtoc2, SECTOR_VTOC2);
         }
 }
@@ -378,7 +441,6 @@ void read_file(int sector, FILE *f)
                 int next;
                 int file_no;
                 int bytes;
-                int short_sect = 0;
 
                 getsect(buf, sector);
 
@@ -449,7 +511,7 @@ void mark_space(unsigned char *bitmap, int start, int alloc)
 int del_file(int sector)
 {
         unsigned char bitmap[ED_BITMAP_SIZE];
-        getbitmap(bitmap);
+        getbitmap(bitmap, 0);
 
         do {
                 unsigned char buf[SECTOR_SIZE];
@@ -512,7 +574,7 @@ int do_free(void)
 {
         int amount;
         unsigned char bitmap[ED_BITMAP_SIZE];
-        getbitmap(bitmap);
+        getbitmap(bitmap, 0);
         amount = amount_free(bitmap);
         printf("%d free sectors, %d free bytes\n", amount, amount * SECTOR_SIZE);
         return 0;
@@ -568,7 +630,7 @@ int do_check()
                                         int next;
                                         getsect(fbuf, sector);
                                         if (map[sector] != -1) {
-                                                printf("  Uh oh.. sector %d already in use by %s (%d)\n", sector, name[sector] ? name[sector] : "reserved", map[sector]);
+                                                printf("  ** Uh oh.. sector %d already in use by %s (%d)\n", sector, name[sector] ? name[sector] : "reserved", map[sector]);
                                         }
                                         map[sector] = file_no;
                                         name[sector] = filename;
@@ -578,7 +640,7 @@ int do_check()
                                         sector = next;
                                 } while (sector);
                                 if (count != sects) {
-                                        printf("  Warning: size in directory (%d) does not match size on disk (%d) for file %s\n",
+                                        printf("  ** Warning: size in directory (%d) does not match size on disk (%d) for file %s\n",
                                                sects, count, filename);
                                 }
                                 printf("  Found %d sectors\n", count);
@@ -599,7 +661,8 @@ int do_check()
         printf("%d sectors in use, %d sectors free\n", total, disk_size - total);
 
         printf("Checking VTOC...\n");
-        getbitmap(bitmap);
+        getbitmap(bitmap, 1);
+        printf("Compare VTOC bitmap with reconstructed bitmap from flies...\n");
         for (x = 0; x != disk_size; ++x) {
                 int is_alloc;
                 if (bitmap[x >> 3] & (1 << (7 - (x & 7))))
@@ -607,13 +670,13 @@ int do_check()
                 else
                         is_alloc = 1;
                 if (is_alloc && map[x] == -1) {
-                        printf("vtoc shows sector %d allocated, but it should be free\n", x);
+                        printf("  ** VTOC shows sector %d allocated, but it should be free\n", x);
                 }
                 if (!is_alloc && map[x] != -1) {
-                        printf("vtoc shows sector %d free, but it should be allocated\n", x);
+                        printf("  ** VTOC shows sector %d free, but it should be allocated\n", x);
                 }
         }
-        printf("done\n");
+        printf("All done.\n");
         return 0;
 }
 
@@ -747,7 +810,7 @@ int put_file(char *local_name, char *atari_name)
         rm(atari_name, 1);
 
         /* Get bitmap... */
-        getbitmap(bitmap);
+        getbitmap(bitmap, 0);
 
         /* Prepare directory entry */
         file_no = find_empty_entry();
@@ -787,7 +850,6 @@ void get_info(struct name *nam)
                 int next;
                 int file_no;
                 int bytes;
-                int short_sect = 0;
 
                 getsect(buf, sector);
 
@@ -795,18 +857,9 @@ void get_info(struct name *nam)
                 file_no = ((buf[DATA_FILE_NUM] >> 2) & 0x3F);
                 bytes = buf[DATA_BYTES];
 
-//                bytes = (buf[DATA_BYTES] & 0x7F); /* Correct for 256 byte sectors? */
-#if 0
-                if (buf[DATA_SHORT] & 0x80)
-                        short_sect = 1;
-                else
-                        short_sect = 0;
-#endif
-
-
                 // Look at file...
                 if (!state) {
-                        if (bytes > 6 && buf[0] == 0xFF && buf[1] == 0xFF) {
+                        if (bytes > 6 && buf[0] == 0xFF && buf[1] == 0xFF) { /* Magic number for binary file */
                                 nam->load_start = (int)buf[2] + ((int)buf[3] << 8);
                                 nam->load_size = (int)buf[4] + ((int)buf[5] << 8) + 1 - nam->load_start;
                         }
