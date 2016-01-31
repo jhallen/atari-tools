@@ -27,7 +27,7 @@ Windows I think).
 
 ### Commands
 
-      ls [-la1A]                    Directory listing
+      ls [-la1]                     Directory listing
                   -l for long
                   -a to show system files
                   -1 to show a single name per line
