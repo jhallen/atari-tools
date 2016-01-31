@@ -222,9 +222,9 @@ void getbitmap(unsigned char *bitmap, int check)
                         printf("  It's OK (count is %d)\n", count);
                 }
                 if (disk_size == ED_DISK_SIZE)
-                        expected_size = 1010;
+                        expected_size = 1011;
                 else
-                        expected_size = 7070;
+                        expected_size = 707;
                 printf("Checking that VTOC usable sector count is %d...\n", expected_size);
                 if (vtoc_total != expected_size)
                         printf("  ** It's wrong, we found: %d\n", vtoc_total);
@@ -438,6 +438,8 @@ int find_file(char *filename, int del)
 
 /* Read a file */
 
+int cvt_ending = 0;
+
 void read_file(int sector, FILE *f)
 {
 
@@ -455,6 +457,14 @@ void read_file(int sector, FILE *f)
 
                 // printf("Sector %d: next=%d, bytes=%d, file_no=%d, short=%d\n",
                 //        sector, next, bytes, file_no, short_sect);
+                
+                if (cvt_ending) {
+                        int x;
+                        for (x = 0; x != bytes; ++x)
+                                if (buf[x] == 0x9b) {
+                                        buf[x] = '\n';
+                                }
+                }
 
                 fwrite(buf, bytes, 1, f);
 
@@ -845,9 +855,9 @@ int put_file(char *local_name, char *atari_name)
 
 void get_info(struct name *nam)
 {
-        int state = 0;
-        int sector = nam->sector;
+        unsigned char bigbuf[65536 * 2];
         int total = 0;
+        int sector = nam->sector;
         unsigned char bf[6];
         int ptr = 0;
         do {
@@ -862,13 +872,8 @@ void get_info(struct name *nam)
                 file_no = ((buf[DATA_FILE_NUM] >> 2) & 0x3F);
                 bytes = buf[DATA_BYTES];
 
-                // Look at file...
-                if (!state) {
-                        if (bytes > 6 && buf[0] == 0xFF && buf[1] == 0xFF) { /* Magic number for binary file */
-                                nam->load_start = (int)buf[2] + ((int)buf[3] << 8);
-                                nam->load_size = (int)buf[4] + ((int)buf[5] << 8) + 1 - nam->load_start;
-                        }
-                        state = 1;
+                if (bytes && total + bytes <= sizeof(bigbuf)) {
+                        memcpy(bigbuf + total, buf, bytes);
                 }
 
                 total += bytes;
@@ -877,6 +882,45 @@ void get_info(struct name *nam)
         } while(sector);
 
         nam->size = total;
+        // Look at file...
+        if (total > 6 && bigbuf[0] == 0xFF && bigbuf[1] == 0xFF) { /* Magic number for binary file */
+                nam->load_start = (int)bigbuf[2] + ((int)bigbuf[3] << 8);
+                nam->load_size = (int)bigbuf[4] + ((int)bigbuf[5] << 8) + 1 - nam->load_start;
+                if (total <= sizeof(bigbuf) && total >= 6) {
+                        if (
+                                bigbuf[total - 6] == 0xE2 &&
+                                bigbuf[total - 5] == 0x02 &&
+                                bigbuf[total - 4] == 0xE3 &&
+                                bigbuf[total - 3] == 0x02
+                        ) {
+                                nam->init = bigbuf[total - 2] + (bigbuf[total - 1] << 8);
+                                if (	total >= 12 &&
+                                        bigbuf[total - 12] == 0xE0 &&
+                                        bigbuf[total - 11] == 0x02 &&
+                                        bigbuf[total - 10] == 0xE1 &&
+                                        bigbuf[total - 9] == 0x02
+                                ) {
+                                        nam->run = bigbuf[total - 8] + (bigbuf[total - 7] << 8);
+                                }
+                        }
+                        if (
+                                bigbuf[total - 6] == 0xE0 &&
+                                bigbuf[total - 5] == 0x02 &&
+                                bigbuf[total - 4] == 0xE1 &&
+                                bigbuf[total - 3] == 0x02
+                        ) {
+                                nam->run = bigbuf[total - 2] + (bigbuf[total - 1] << 8);
+                                if (	total >= 12 &&
+                                        bigbuf[total - 12] == 0xE2 &&
+                                        bigbuf[total - 11] == 0x02 &&
+                                        bigbuf[total - 10] == 0xE3 &&
+                                        bigbuf[total - 9] == 0x02
+                                ) {
+                                        nam->init = bigbuf[total - 8] + (bigbuf[total - 7] << 8);
+                                }
+                        }
+                }
+        }
 }
 
 void atari_dir(int all, int full, int single)
@@ -933,12 +977,23 @@ void atari_dir(int all, int full, int single)
                 int total_bytes = 0;
                 printf("\n");
                 for (x = 0; x != name_n; ++x) {
-                        if (names[x]->load_start != -1)
-                                printf("-r%c%c%c %6d (%3d) %-13s (load_start=$%x load_end=$%x)\n",
+                        char extra_info[80];
+                        extra_info[0] = 0;
+                        if (names[x]->load_start != -1) {
+                                sprintf(extra_info, "load_start=$%x load_end=$%x", names[x]->load_start, names[x]->load_start + names[x]->load_size - 1);
+                                if (names[x]->init != -1) {
+                                        sprintf(extra_info + strlen(extra_info), " init=$%x", names[x]->init);
+                                }
+                                if (names[x]->run != -1) {
+                                        sprintf(extra_info + strlen(extra_info), " run=$%x", names[x]->run);
+                                }
+                        }
+                        if (extra_info[0])
+                                printf("-r%c%c%c %6d (%3d) %-13s (%s)\n",
                                        (names[x]->locked ? '-' : 'w'),
                                        (names[x]->is_cm ? 'x' : '-'),
                                        (names[x]->is_sys ? 's' : '-'),
-                                       names[x]->size, names[x]->sects, names[x]->name, names[x]->load_start, names[x]->load_start + names[x]->load_size - 1);
+                                       names[x]->size, names[x]->sects, names[x]->name, extra_info);
                         else
                                 printf("-r%c%c%c %6d (%3d) %-13s\n",
                                        (names[x]->locked ? '-' : 'w'),
@@ -987,23 +1042,23 @@ int main(int argc, char *argv[])
 	int x;
 	char *disk_name;
 	x = 1;
-	if (x == argc) {
+	if (x == argc || !strcmp(argv[x], "--help") || !strcmp(argv[x], "-h")) {
                 printf("\nAtari DOS diskette access\n");
                 printf("\n");
-                printf("Syntax: atr path-to-diskette command args\n");
+                printf("Syntax: atr path-to-diskette [command] [args]\n");
                 printf("\n");
-                printf("  Commands:\n");
+                printf("  Commands: (with no command, ls is assumed)\n\n");
                 printf("      ls [-la1]                    Directory listing\n");
                 printf("                  -l for long\n");
                 printf("                  -a to show system files\n");
-                printf("                  -1 to show a single name per line\n");
-                printf("      cat atari-name                Type file to console\n");
-                printf("      get atari-name [local-name]   Copy file from diskette to local-name\n");
-                printf("      put local-name [atari-name]   Copy file to diskette to atari-name\n");
-                printf("      free                          Print amount of free space\n");
-                printf("      rm atari-name                 Delete a file\n");
-                printf("      check                         Check filesystem\n");
-                printf("\n");
+                printf("                  -1 to show a single name per line\n\n");
+                printf("      cat [-e] atari-name           Type file to console\n");
+                printf("                                    (-e to convert line ending from 0x9b to 0x0a)\n\n");
+                printf("      get atari-name [local-name]   Copy file from diskette to local-name\n\n");
+                printf("      put local-name [atari-name]   Copy file from local-name to diskette\n\n");
+                printf("      free                          Print amount of free space\n\n");
+                printf("      rm atari-name                 Delete a file\n\n");
+                printf("      check                         Check filesystem\n\n");
                 return -1;
 	}
 	disk_name = argv[x++];
@@ -1059,6 +1114,10 @@ int main(int argc, char *argv[])
                 return do_check();
 	} else if (!strcmp(argv[x], "cat")) {
 	        ++x;
+	        if (!strcmp(argv[x], "-e")) {
+                        cvt_ending = 1;
+                        ++x;
+                }
 	        if (x == argc) {
 	                printf("Missing file name to cat\n");
 	                return -1;

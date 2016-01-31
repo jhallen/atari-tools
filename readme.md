@@ -32,11 +32,12 @@ Windows I think).
                   -a to show system files
                   -1 to show a single name per line
 
-      cat atari-name                Type file to console
+      cat [-e] atari-name           Type file to console
+                                    (with -e, fixes line endings 0x9b to 0x0a)
 
       get atari-name [local-name]   Copy file from diskette to local-name
 
-      put local-name [atari-name]   Copy file to diskette to atari-name
+      put local-name [atari-name]   Copy file from local-name to diskette
 
       free                          Print amount of free space
 
