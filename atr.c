@@ -288,6 +288,16 @@ void putbitmap(unsigned char *bitmap)
         }
 }
 
+/* Segment list */
+struct segment
+{
+        struct segment *next;
+        int start; /* 2E0=RUN, 2E2=INIT */
+        int size;
+        int value;
+        int value1;
+};
+
 /* File stored internally for nice formatting */
 struct name
 {
@@ -301,11 +311,10 @@ struct name
         int is_sys; /* Set if it's a .SYS file */
         int is_cm; /* Set if it's a .COM file */
 
+        
+
         /* From file itself */
-        int load_start;
-        int load_size;
-        int init;
-        int run;
+        struct segment *segments;
         int size;
 };
 
@@ -421,6 +430,9 @@ int find_file(char *filename, int del)
                 getsect(buf, x);
                 for (y = 0; y != SECTOR_SIZE; y += ENTRY_SIZE) {
                         struct dirent *d = (struct dirent *)(buf + y);
+                        /* OSS OS/A+ disks put junk after first never used directory entry */
+                        if (!(d->flag & (FLAG_IN_USE | FLAG_DELETED)))
+                                goto done;
                         if (d->flag & FLAG_IN_USE) {
                                 char *s = getname(d);
                                 if (!strcmp(s, filename)) {
@@ -433,6 +445,7 @@ int find_file(char *filename, int del)
                         }
                 }
         }
+        done:
         return -1;
 }
 
@@ -632,6 +645,9 @@ int do_check()
                 getsect(buf, x);
                 for (y = 0; y != SECTOR_SIZE; y += ENTRY_SIZE) {
                         struct dirent *d = (struct dirent *)(buf + y);
+                        /* OSS OS/A+ disks put junk after first never used directory entry */
+                        if (!(d->flag & (FLAG_IN_USE | FLAG_DELETED)))
+                                goto done;
                         if (d->flag & FLAG_IN_USE) {
                                 char *filename = strdup(getname(d));
                                 int sector;
@@ -662,6 +678,7 @@ int do_check()
                         }
                 }
         }
+        done:
         total = 0;
         for (x = 0; x != disk_size; ++x) {
                 if (map[x] != -1) {
@@ -764,7 +781,8 @@ int write_dir(int file_no, char *name, int first_sect, int sects)
         d->start_lo = first_sect;
         d->count_hi = (sects >> 8);
         d->count_lo = sects;
-        d->flag = FLAG_IN_USE;
+        /* DOS complains on some file operations if FLAG_DOS2 is not there: */
+        d->flag = FLAG_IN_USE | FLAG_DOS2;
         
         getsect(dir_buf, SECTOR_DIR + file_no / (SECTOR_SIZE / ENTRY_SIZE));
         memcpy(dir_buf + ENTRY_SIZE * (file_no % (SECTOR_SIZE / ENTRY_SIZE)), d, ENTRY_SIZE);
@@ -860,6 +878,7 @@ void get_info(struct name *nam)
         int sector = nam->sector;
         unsigned char bf[6];
         int ptr = 0;
+        struct segment *lastseg = 0;
         do {
                 unsigned char buf[SECTOR_SIZE];
                 int next;
@@ -882,41 +901,42 @@ void get_info(struct name *nam)
         } while(sector);
 
         nam->size = total;
+        nam->segments = 0;
         // Look at file...
-        if (total > 6 && bigbuf[0] == 0xFF && bigbuf[1] == 0xFF) { /* Magic number for binary file */
-                nam->load_start = (int)bigbuf[2] + ((int)bigbuf[3] << 8);
-                nam->load_size = (int)bigbuf[4] + ((int)bigbuf[5] << 8) + 1 - nam->load_start;
-                if (total <= sizeof(bigbuf) && total >= 6) {
-                        if (
-                                bigbuf[total - 6] == 0xE2 &&
-                                bigbuf[total - 5] == 0x02 &&
-                                bigbuf[total - 4] == 0xE3 &&
-                                bigbuf[total - 3] == 0x02
-                        ) {
-                                nam->init = bigbuf[total - 2] + (bigbuf[total - 1] << 8);
-                                if (	total >= 12 &&
-                                        bigbuf[total - 12] == 0xE0 &&
-                                        bigbuf[total - 11] == 0x02 &&
-                                        bigbuf[total - 10] == 0xE1 &&
-                                        bigbuf[total - 9] == 0x02
-                                ) {
-                                        nam->run = bigbuf[total - 8] + (bigbuf[total - 7] << 8);
-                                }
+        if (total >= 2 && bigbuf[0] == 0xFF && bigbuf[1] == 0xFF) { /* Magic number for binary file */
+                int idx;
+                int ok = 1;
+                int segsize;
+                for (idx = 0; ok && idx < total; idx += segsize) {
+                        segsize = 0;
+                        ok = 0;
+                        if (idx + 2 <= total && bigbuf[idx] == 0xFF && bigbuf[idx + 1] == 0xFF) {
+                                idx += 2;
+                                ok = 1;
                         }
-                        if (
-                                bigbuf[total - 6] == 0xE0 &&
-                                bigbuf[total - 5] == 0x02 &&
-                                bigbuf[total - 4] == 0xE1 &&
-                                bigbuf[total - 3] == 0x02
-                        ) {
-                                nam->run = bigbuf[total - 2] + (bigbuf[total - 1] << 8);
-                                if (	total >= 12 &&
-                                        bigbuf[total - 12] == 0xE2 &&
-                                        bigbuf[total - 11] == 0x02 &&
-                                        bigbuf[total - 10] == 0xE3 &&
-                                        bigbuf[total - 9] == 0x02
-                                ) {
-                                        nam->init = bigbuf[total - 8] + (bigbuf[total - 7] << 8);
+                        if (idx + 4 <= total) {
+                                struct segment *segment;
+                                int first = (int)bigbuf[idx + 0] + ((int)bigbuf[idx + 1] << 8);
+                                int last = (int)bigbuf[idx + 2] + ((int)bigbuf[idx + 3] << 8);
+                                segsize = last - first + 1;
+                                idx += 4;
+                                ok = 1;
+                                segment = (struct segment *)malloc(sizeof(struct segment));
+                                segment->start = first;
+                                segment->size = segsize;
+                                segment->next = 0;
+                                segment->value = 0;
+                                segment->value1 = 0;
+                                if (!nam->segments)
+                                        nam->segments = segment;
+                                if (lastseg)
+                                        lastseg->next = segment;
+                                lastseg = segment;
+                                if (segsize >= 2 && idx + 2 <= total) {
+                                        segment->value = (int)bigbuf[idx + 0] + ((int)bigbuf[idx + 1] << 8);
+                                }
+                                if (segsize >= 4 && idx + 4 <= total) {
+                                        segment->value1 = (int)bigbuf[idx + 2] + ((int)bigbuf[idx + 3] << 8);
                                 }
                         }
                 }
@@ -934,6 +954,11 @@ void atari_dir(int all, int full, int single)
                 getsect(buf, x);
                 for (y = 0; y != SECTOR_SIZE; y += ENTRY_SIZE) {
                         struct dirent *d = (struct dirent *)(buf + y);
+
+                        /* OSS OS/A+ disks put junk after first never used directory entry */
+                        if (!(d->flag & (FLAG_IN_USE | FLAG_DELETED)))
+                                goto done;
+
                         if (d->flag & FLAG_IN_USE) {
                                 struct name *nam;
                                 char *s = getname(d);
@@ -945,10 +970,7 @@ void atari_dir(int all, int full, int single)
                                         nam->locked = 0;
                                 nam->sector = d->start_lo + (d->start_hi * 256);
                                 nam->sects = d->count_lo + (d->count_hi * 256);
-                                nam->load_start = -1;
-                                nam->load_size = -1;
-                                nam->init = -1;
-                                nam->run = -1;
+                                nam->segments = 0;
                                 nam->size = -1;
                                 get_info(nam);
 
@@ -970,6 +992,7 @@ void atari_dir(int all, int full, int single)
                         }
                 }
         }
+        done:
         qsort(names, name_n, sizeof(struct name *), (int (*)(const void *, const void *))comp);
 
         if (full) {
@@ -977,15 +1000,19 @@ void atari_dir(int all, int full, int single)
                 int total_bytes = 0;
                 printf("\n");
                 for (x = 0; x != name_n; ++x) {
-                        char extra_info[80];
+                        char extra_info[1024];
+                        struct segment *seg;
                         extra_info[0] = 0;
-                        if (names[x]->load_start != -1) {
-                                sprintf(extra_info, "load_start=$%x load_end=$%x", names[x]->load_start, names[x]->load_start + names[x]->load_size - 1);
-                                if (names[x]->init != -1) {
-                                        sprintf(extra_info + strlen(extra_info), " init=$%x", names[x]->init);
-                                }
-                                if (names[x]->run != -1) {
-                                        sprintf(extra_info + strlen(extra_info), " run=$%x", names[x]->run);
+                        for (seg = names[x]->segments; seg; seg = seg->next) {
+                                if (strlen(extra_info)) strcat(extra_info, " ");
+                                if (seg->start == 0x2E0 && seg->size == 2) {
+                                        sprintf(extra_info + strlen(extra_info), "run=%x", seg->value);
+                                } else if (seg->start == 0x2E0 && seg->size == 4) {
+                                        sprintf(extra_info + strlen(extra_info), "init=%x run=%x", seg->value1, seg->value);
+                                } else if (seg->start == 0x2E2 && seg->size == 2) {
+                                        sprintf(extra_info + strlen(extra_info), "init=%x", seg->value);
+                                } else {
+                                        sprintf(extra_info + strlen(extra_info), "load=%x-%x", seg->start, seg->start + seg->size - 1);
                                 }
                         }
                         if (extra_info[0])
