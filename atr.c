@@ -694,7 +694,7 @@ int do_check()
 
         printf("Checking VTOC...\n");
         getbitmap(bitmap, 1);
-        printf("Compare VTOC bitmap with reconstructed bitmap from flies...\n");
+        printf("Compare VTOC bitmap with reconstructed bitmap from files...\n");
         for (x = 0; x != disk_size; ++x) {
                 int is_alloc;
                 if (bitmap[x >> 3] & (1 << (7 - (x & 7))))
