@@ -87,7 +87,7 @@ int disk_size = 720;
 #define SECTOR_DIR_SIZE 8
 
 /* Directory entry */
-#define FLAG_NEVER_USER 0x00
+#define FLAG_NEVER_USED 0x00
 #define FLAG_DELETED 0x80
 #define FLAG_IN_USE 0x40
 #define FLAG_LOCKED 0x20
@@ -294,8 +294,8 @@ struct segment
         struct segment *next;
         int start; /* 2E0=RUN, 2E2=INIT */
         int size;
-        int value;
-        int value1;
+        int init;
+        int run;
 };
 
 /* File stored internally for nice formatting */
@@ -874,6 +874,7 @@ int put_file(char *local_name, char *atari_name)
 void get_info(struct name *nam)
 {
         unsigned char bigbuf[65536 * 2];
+        unsigned char membuf[65536];
         int total = 0;
         int sector = nam->sector;
         unsigned char bf[6];
@@ -902,6 +903,7 @@ void get_info(struct name *nam)
 
         nam->size = total;
         nam->segments = 0;
+
         // Look at file...
         if (total >= 2 && bigbuf[0] == 0xFF && bigbuf[1] == 0xFF) { /* Magic number for binary file */
                 int idx;
@@ -910,10 +912,12 @@ void get_info(struct name *nam)
                 for (idx = 0; ok && idx < total; idx += segsize) {
                         segsize = 0;
                         ok = 0;
+                        /* Each segment can optionally start with 0xFFFF, skip it */
                         if (idx + 2 <= total && bigbuf[idx] == 0xFF && bigbuf[idx + 1] == 0xFF) {
                                 idx += 2;
                                 ok = 1;
                         }
+                        /* Get header */
                         if (idx + 4 <= total) {
                                 struct segment *segment;
                                 int first = (int)bigbuf[idx + 0] + ((int)bigbuf[idx + 1] << 8);
@@ -921,27 +925,45 @@ void get_info(struct name *nam)
                                 segsize = last - first + 1;
                                 idx += 4;
                                 ok = 1;
-                                segment = (struct segment *)malloc(sizeof(struct segment));
-                                segment->start = first;
-                                segment->size = segsize;
-                                segment->next = 0;
-                                segment->value = 0;
-                                segment->value1 = 0;
-                                if (!nam->segments)
-                                        nam->segments = segment;
-                                if (lastseg)
-                                        lastseg->next = segment;
-                                lastseg = segment;
-                                if (segsize >= 2 && idx + 2 <= total) {
-                                        segment->value = (int)bigbuf[idx + 0] + ((int)bigbuf[idx + 1] << 8);
+                                if (segsize < 1) { /* Bad load format? */
+                                        break;
                                 }
-                                if (segsize >= 4 && idx + 4 <= total) {
-                                        segment->value1 = (int)bigbuf[idx + 2] + ((int)bigbuf[idx + 3] << 8);
+                                /* Ignore short segments (DUP.SYS loader will not skip them) */
+                                if (segsize > 1) {
+                                        segment = (struct segment *)malloc(sizeof(struct segment));
+                                        segment->start = first;
+                                        segment->size = segsize;
+                                        segment->next = 0;
+                                        segment->init = -1;
+                                        segment->run = -1;
+                                        if (!nam->segments)
+                                                nam->segments = segment;
+                                        if (lastseg)
+                                                lastseg->next = segment;
+                                        lastseg = segment;
+                                        membuf[0x2e0] = 0xFE;
+                                        membuf[0x2e1] = 0xFE;
+                                        membuf[0x2e2] = 0xFE;
+                                        membuf[0x2e3] = 0xFE;
+                                        memcpy(membuf + first, bigbuf + idx, segsize);
+                                        if (membuf[0x2e0]!=0xFE || membuf[0x2e1]!=0xFE)
+                                                segment->run = (int)membuf[0x2e0] + ((int)membuf[0x2e1] << 8);
+                                        if (membuf[0x2e2]!=0xFE || membuf[0x2e3]!=0xFE)
+                                                segment->init = (int)membuf[0x2e2] + ((int)membuf[0x2e3] << 8);
                                 }
                         }
                 }
         }
 }
+
+#define FLUSHLINE do { \
+        if (strlen(linebuf) + 15 >= 78) { \
+                int n; \
+                printf("%s\n", linebuf); \
+                for (n = 0; n != ofst; ++n) linebuf[n] = ' '; \
+                linebuf[n] = 0; \
+        } \
+} while (0)
 
 void atari_dir(int all, int full, int single)
 {
@@ -1000,33 +1022,37 @@ void atari_dir(int all, int full, int single)
                 int total_bytes = 0;
                 printf("\n");
                 for (x = 0; x != name_n; ++x) {
-                        char extra_info[1024];
+                        char linebuf[100];
+                        int ofst;
+                        int extra = 0;
                         struct segment *seg;
-                        extra_info[0] = 0;
+                        sprintf(linebuf, "-r%c%c%c %6d (%3d) %-13s",
+                               (names[x]->locked ? '-' : 'w'),
+                               (names[x]->is_cm ? 'x' : '-'),
+                               (names[x]->is_sys ? 's' : '-'),
+                               names[x]->size, names[x]->sects, names[x]->name);
+                        ofst = strlen(linebuf) + 1;
                         for (seg = names[x]->segments; seg; seg = seg->next) {
-                                if (strlen(extra_info)) strcat(extra_info, " ");
-                                if (seg->start == 0x2E0 && seg->size == 2) {
-                                        sprintf(extra_info + strlen(extra_info), "run=%x", seg->value);
-                                } else if (seg->start == 0x2E0 && seg->size == 4) {
-                                        sprintf(extra_info + strlen(extra_info), "init=%x run=%x", seg->value1, seg->value);
-                                } else if (seg->start == 0x2E2 && seg->size == 2) {
-                                        sprintf(extra_info + strlen(extra_info), "init=%x", seg->value);
+                                if (!extra) {
+                                        strcat(linebuf, " (");
+                                        extra = 1;
                                 } else {
-                                        sprintf(extra_info + strlen(extra_info), "load=%x-%x", seg->start, seg->start + seg->size - 1);
+                                        strcat(linebuf, " ");
+                                }
+                                FLUSHLINE;
+                                sprintf(linebuf + strlen(linebuf), "load=%x-%x", seg->start, seg->start + seg->size - 1);
+                                if (seg->init != -1) {
+                                        FLUSHLINE;
+                                        sprintf(linebuf + strlen(linebuf), " init=%x", seg->init);
+                                }
+                                if (seg->run != -1) {
+                                        FLUSHLINE;
+                                        sprintf(linebuf + strlen(linebuf), " run=%x", seg->run);
                                 }
                         }
-                        if (extra_info[0])
-                                printf("-r%c%c%c %6d (%3d) %-13s (%s)\n",
-                                       (names[x]->locked ? '-' : 'w'),
-                                       (names[x]->is_cm ? 'x' : '-'),
-                                       (names[x]->is_sys ? 's' : '-'),
-                                       names[x]->size, names[x]->sects, names[x]->name, extra_info);
-                        else
-                                printf("-r%c%c%c %6d (%3d) %-13s\n",
-                                       (names[x]->locked ? '-' : 'w'),
-                                       (names[x]->is_cm ? 'x' : '-'),
-                                       (names[x]->is_sys ? 's' : '-'),
-                                       names[x]->size, names[x]->sects, names[x]->name);
+                        if (extra)
+                                strcat(linebuf, ")");
+                        printf("%s\n", linebuf);
                         totals += names[x]->sects;
                         total_bytes += names[x]->size;
                 }
@@ -1051,7 +1077,7 @@ void atari_dir(int all, int full, int single)
                                 int n = y + x * rows;
                                 /* printf("%11d  ", n); */
                                 if (n < name_n)
-                                        printf("%-12s  ", names[n]->name);
+                                        printf("%-12s ", names[n]->name);
                                 else
                                         printf("             ");
                         }
@@ -1099,14 +1125,21 @@ int main(int argc, char *argv[])
 	        return -1;
 	}
 	size = ftell(disk);
-	if (size - 16 == 40 * 18 * 128) {
+//	if (size - 16 == 40 * 18 * 128) {
+        if (size - 16 < 1024 * 128) {
+                /* Minimum size for enhanced density is 1024 sectors */
+                /* Anything less: assume single-density */
 	        /* printf("Single density DOS 2.0S disk assumed\n"); */
 	        disk_size = SD_DISK_SIZE;
-	} else if (size - 16 == 40 * 26 * 128) {
+//	} else if (size - 16 == 40 * 26 * 128) {
+        } else if (size - 16 < 128*3 + 256*717) {
+                /* Minimum size of double density is 3 128 byte sectors + 717 256 byte sectors */
+                /* Anything less: assume enhanced density */
 	        /* printf("Enhanced density DOS 2.5 disk assumed\n"); */
 	        disk_size = ED_DISK_SIZE;
 	} else {
 	        printf("Unknown disk size.  Expected:\n");
+	        printf("  .ATR header is 16 bytes, so:\n");
 	        printf("  16 + 40*18*128 = 92,176 bytes for DOS 2.0S single density\n");
 	        printf("  16 + 40*26*128 = 133,136 bytes for DOS 2.5 enhanced density\n");
 	        return -1;
