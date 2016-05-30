@@ -225,26 +225,26 @@ void getbitmap(unsigned char *bitmap, int check)
                 int vtoc_count = vtoc[VTOC_NUM_UNUSED] + (256 * vtoc[VTOC_NUM_UNUSED + 1]);
                 int vtoc_total = vtoc[VTOC_NUM_SECTS] + (256 * vtoc[VTOC_NUM_SECTS + 1]);
                 int expected_size;
-                printf("Checking that VTOC unused count matches bitmap...\n");
+                printf("  Checking that VTOC unused count matches bitmap...\n");
                 if (count != vtoc_count) {
-                        printf("  ** It doesn't match: bitmap has %d free, but VTOC count is %d\n", count, vtoc_count);
+                        printf("    ** It doesn't match: bitmap has %d free, but VTOC count is %d\n", count, vtoc_count);
                 } else {
-                        printf("  It's OK (count is %d)\n", count);
+                        printf("    It's OK (count is %d)\n", count);
                 }
                 if (disk_size == ED_DISK_SIZE)
                         expected_size = 1011;
                 else
                         expected_size = 707;
-                printf("Checking that VTOC usable sector count is %d...\n", expected_size);
+                printf("  Checking that VTOC usable sector count is %d...\n", expected_size);
                 if (vtoc_total != expected_size)
-                        printf("  ** It's wrong, we found: %d\n", vtoc_total);
+                        printf("    ** It's wrong, we found: %d\n", vtoc_total);
                 else
-                        printf("  It's OK\n");
-                printf("Checking that VTOC type code code is 2...\n");
+                        printf("    It's OK\n");
+                printf("  Checking that VTOC type code is 2...\n");
                 if (vtoc[VTOC_TYPE] == 2)
-                        printf("  It's OK\n");
+                        printf("    It's OK\n");
                 else
-                        printf("  ** It's wrong, we found: %d\n", vtoc[VTOC_TYPE]);
+                        printf("    ** It's wrong, we found: %d\n", vtoc[VTOC_TYPE]);
         }
 
         if (disk_size == ED_DISK_SIZE) {
@@ -260,11 +260,11 @@ void getbitmap(unsigned char *bitmap, int check)
                 if (check) {
                         int count = count_free(bitmap + SD_BITMAP_SIZE, ED_BITMAP_SIZE - SD_BITMAP_SIZE);
                         int vtoc2_count = vtoc2[VTOC2_NUM_UNUSED] + 256 * vtoc2[VTOC2_NUM_UNUSED + 1];
-                        printf("Checking that VTOC2 unused count matches bitmap...\n");
+                        printf("  Checking that VTOC2 unused count matches bitmap...\n");
                         if (count != vtoc2_count) {
-                                printf("  ** It doesn't match: bitmap has %d free, but VTOC2 count is %d\n", count, vtoc2_count);
+                                printf("    ** It doesn't match: bitmap has %d free, but VTOC2 count is %d\n", count, vtoc2_count);
                         } else {
-                                printf("  It's OK (count is %d)\n", count);
+                                printf("    It's OK (count is %d)\n", count);
                         }
                 }
         }
@@ -660,6 +660,7 @@ int do_check()
         unsigned char fbuf[SECTOR_SIZE];
         int x, y;
         int total;
+        int ok;
         char map[ED_DISK_SIZE];
         char *name[ED_DISK_SIZE];
 
@@ -745,9 +746,10 @@ int do_check()
         }
         printf("%d sectors in use, %d sectors free\n", total, disk_size - total);
 
-        printf("Checking VTOC...\n");
+        printf("Checking VTOC header...\n");
         getbitmap(bitmap, 1);
         printf("Compare VTOC bitmap with reconstructed bitmap from files...\n");
+        ok = 1;
         for (x = 0; x != disk_size; ++x) {
                 int is_alloc;
                 if (bitmap[x >> 3] & (1 << (7 - (x & 7))))
@@ -756,10 +758,15 @@ int do_check()
                         is_alloc = 1;
                 if (is_alloc && map[x] == -1) {
                         printf("  ** VTOC shows sector %d allocated, but it should be free\n", x);
+                        ok = 0;
                 }
                 if (!is_alloc && map[x] != -1) {
                         printf("  ** VTOC shows sector %d free, but it should be allocated\n", x);
+                        ok = 0;
                 }
+        }
+        if (ok) {
+                printf("  It's OK.\n");
         }
         printf("All done.\n");
         return 0;
