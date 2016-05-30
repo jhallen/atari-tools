@@ -162,15 +162,22 @@ struct dirent {
 
 FILE *disk;
 
-void getsect(unsigned char *buf, int sect)
+int getsect(unsigned char *buf, int sect)
 {
         if (!sect) {
-                printf("Oops, requested sector 0\n");
-                exit(-1);
+                printf("Oops, tried to read sector 0\n");
+                return -1;
         }
         sect -= 1;
-        fseek(disk, sect * SECTOR_SIZE + 16, SEEK_SET);
-        fread((char *)buf, SECTOR_SIZE, 1, disk);
+        if (fseek(disk, sect * SECTOR_SIZE + 16, SEEK_SET)) {
+                printf("Oops, tried to seek past end (sector %d)\n", sect);
+                return -1;
+        }
+        if (SECTOR_SIZE != fread((char *)buf, 1, SECTOR_SIZE, disk)) {
+                printf("Oops, read error (sector %d)\n", sect);
+                return -1;
+        }
+        return 0;
 }
 
 void putsect(unsigned char *buf, int sect)
@@ -207,7 +214,10 @@ void getbitmap(unsigned char *bitmap, int check)
         unsigned char vtoc[SECTOR_SIZE];
         unsigned char vtoc2[SECTOR_SIZE];
 
-        getsect(vtoc, SECTOR_VTOC);
+        if (getsect(vtoc, SECTOR_VTOC)) {
+                printf(" (trying to read VTOC)\n");
+                exit(-1);
+        }
         memcpy(bitmap, vtoc + VTOC_BITMAP, SD_BITMAP_SIZE);
 
         if (check) {
@@ -238,7 +248,10 @@ void getbitmap(unsigned char *bitmap, int check)
         }
 
         if (disk_size == ED_DISK_SIZE) {
-                getsect(vtoc2, SECTOR_VTOC2);
+                if (getsect(vtoc2, SECTOR_VTOC2)) {
+                        printf(" (trying to read VTOC2)\n");
+                        exit(-1);
+                }
                 memcpy(
                         bitmap + SD_BITMAP_SIZE,
                         vtoc2 + (SD_BITMAP_SIZE - ED_BITMAP_START),
@@ -265,7 +278,10 @@ void putbitmap(unsigned char *bitmap)
         int count;
         unsigned char vtoc2[SECTOR_SIZE];
 
-        getsect(vtoc, SECTOR_VTOC);
+        if (getsect(vtoc, SECTOR_VTOC)) {
+                printf(" (trying to read VTOC)\n");
+                exit(-1);
+        }
         memcpy(vtoc + VTOC_BITMAP, bitmap, SD_BITMAP_SIZE);
 
         /* Update free count */
@@ -276,7 +292,10 @@ void putbitmap(unsigned char *bitmap)
         putsect(vtoc, SECTOR_VTOC);
 
         if (disk_size == ED_DISK_SIZE) {
-                getsect(vtoc2, SECTOR_VTOC2);
+                if (getsect(vtoc2, SECTOR_VTOC2)) {
+                        printf(" (trying to read VTOC2)\n");
+                        exit(-1);
+                }
                 memcpy(vtoc2, bitmap + ED_BITMAP_START, ED_BITMAP_SIZE - ED_BITMAP_START);
 
                 /* Update free count */
@@ -336,7 +355,10 @@ int find_empty_entry()
         int x, y;
         for (x = SECTOR_DIR; x != SECTOR_DIR + SECTOR_DIR_SIZE; ++x) {
                 int y;
-                getsect(buf, x);
+                if (getsect(buf, x)) {
+                        printf(" (trying to read directory sector)\n");
+                        exit(-1);
+                }
                 for (y = 0; y != SECTOR_SIZE; y += ENTRY_SIZE) {
                         struct dirent *d = (struct dirent *)(buf + y);
                         if (!(d->flag & FLAG_IN_USE)) {
@@ -427,7 +449,10 @@ int find_file(char *filename, int del)
         int x, y;
         for (x = SECTOR_DIR; x != SECTOR_DIR + SECTOR_DIR_SIZE; ++x) {
                 int y;
-                getsect(buf, x);
+                if (getsect(buf, x)) {
+                        printf(" (trying to read directory)\n");
+                        goto done;
+                }
                 for (y = 0; y != SECTOR_SIZE; y += ENTRY_SIZE) {
                         struct dirent *d = (struct dirent *)(buf + y);
                         /* OSS OS/A+ disks put junk after first never used directory entry */
@@ -455,6 +480,7 @@ int cvt_ending = 0;
 
 void read_file(int sector, FILE *f)
 {
+        int count = 0;
 
         do {
                 unsigned char buf[SECTOR_SIZE];
@@ -462,7 +488,15 @@ void read_file(int sector, FILE *f)
                 int file_no;
                 int bytes;
 
-                getsect(buf, sector);
+                if (count == 2048) {
+                        printf(" (file too long)\n");
+                        break;
+                }
+                if (getsect(buf, sector)) {
+                        printf(" (trying to read from file)\n");
+                        return;
+                }
+                ++count;
 
                 next = (int)buf[DATA_NEXT_LOW] + ((int)(0x3 & buf[DATA_NEXT_HIGH]) << 8);
                 file_no = ((buf[DATA_FILE_NUM] >> 2) & 0x3F);
@@ -539,6 +573,7 @@ void mark_space(unsigned char *bitmap, int start, int alloc)
 int del_file(int sector)
 {
         unsigned char bitmap[ED_BITMAP_SIZE];
+        int count = 0;
         getbitmap(bitmap, 0);
 
         do {
@@ -547,7 +582,15 @@ int del_file(int sector)
                 int file_no;
                 int bytes;
 
-                getsect(buf, sector);
+                if (count == 2048) {
+                        printf(" (file too long)\n");
+                        break;
+                }
+                if (getsect(buf, sector)) {
+                        printf(" (while deleting a file)\n");
+                        break;
+                }
+                ++count;
 
                 next = (int)buf[DATA_NEXT_LOW] + ((int)(0x3 & buf[DATA_NEXT_HIGH]) << 8);
                 file_no = ((buf[DATA_FILE_NUM] >> 2) & 0x3F);
@@ -642,7 +685,10 @@ int do_check()
         /* Step through each file */
         for (x = SECTOR_DIR; x != SECTOR_DIR + SECTOR_DIR_SIZE; ++x) {
                 int y;
-                getsect(buf, x);
+                if (getsect(buf, x)) {
+                        printf(" (reading directory)\n");
+                        exit(-1);
+                }
                 for (y = 0; y != SECTOR_SIZE; y += ENTRY_SIZE) {
                         struct dirent *d = (struct dirent *)(buf + y);
                         /* OSS OS/A+ disks put junk after first never used directory entry */
@@ -659,7 +705,14 @@ int do_check()
                                 printf("Checking %s (file_no %d)\n", filename, file_no);
                                 do {
                                         int next;
-                                        getsect(fbuf, sector);
+                                        if (count == 2048) {
+                                                printf(" (file too long)\n");
+                                                break;
+                                        }
+                                        if (getsect(fbuf, sector)) {
+                                                printf(" (reading file)\n");
+                                                exit(-1);
+                                        }
                                         if (map[sector] != -1) {
                                                 printf("  ** Uh oh.. sector %d already in use by %s (%d)\n", sector, name[sector] ? name[sector] : "reserved", map[sector]);
                                         }
@@ -784,7 +837,10 @@ int write_dir(int file_no, char *name, int first_sect, int sects)
         /* DOS complains on some file operations if FLAG_DOS2 is not there: */
         d->flag = FLAG_IN_USE | FLAG_DOS2;
         
-        getsect(dir_buf, SECTOR_DIR + file_no / (SECTOR_SIZE / ENTRY_SIZE));
+        if (getsect(dir_buf, SECTOR_DIR + file_no / (SECTOR_SIZE / ENTRY_SIZE))) {
+                printf(" (trying to read directory)\n");
+                exit(-1);
+        }
         memcpy(dir_buf + ENTRY_SIZE * (file_no % (SECTOR_SIZE / ENTRY_SIZE)), d, ENTRY_SIZE);
         putsect(dir_buf, SECTOR_DIR + file_no / (SECTOR_SIZE / ENTRY_SIZE));
         return 0;
@@ -886,7 +942,14 @@ void get_info(struct name *nam)
                 int file_no;
                 int bytes;
 
-                getsect(buf, sector);
+                if (total + 125 >= sizeof(bigbuf)) {
+                        printf(" (file %s too long)\n", nam->name);
+                        break;
+                }
+                if (getsect(buf, sector)) {
+                        printf(" (trying to read file %s)\n", nam->name);
+                        break;
+                }
 
                 next = (int)buf[DATA_NEXT_LOW] + ((int)(0x3 & buf[DATA_NEXT_HIGH]) << 8);
                 file_no = ((buf[DATA_FILE_NUM] >> 2) & 0x3F);
@@ -973,7 +1036,10 @@ void atari_dir(int all, int full, int single)
         int cols = (80 / 13);
         for (x = SECTOR_DIR; x != SECTOR_DIR + SECTOR_DIR_SIZE; ++x) {
                 int y;
-                getsect(buf, x);
+                if (getsect(buf, x)) {
+                        printf(" (trying to read directory)\n");
+                        break;
+                }
                 for (y = 0; y != SECTOR_SIZE; y += ENTRY_SIZE) {
                         struct dirent *d = (struct dirent *)(buf + y);
 
