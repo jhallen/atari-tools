@@ -892,12 +892,14 @@ int put_file(char *local_name, char *atari_name)
                 return -1;
         }
         fclose(f);
-#if 0
-        /* Convert UNIX line endings to Atari */
-        for (x = 0; x != size; ++x)
-                if (buf[x] == '\n')
-                        buf[x] = 0x9b;
-#endif
+
+        if (cvt_ending) {
+                /* Convert UNIX line endings to Atari */
+                for (x = 0; x != size; ++x)
+                        if (buf[x] == '\n')
+                                buf[x] = 0x9b;
+        }
+
         /* Fill with NULs to end of sector */
         for (x = size; x != up; ++x)
                 buf[x] = 0;
@@ -1178,10 +1180,14 @@ int main(int argc, char *argv[])
                 printf("                  -l for long\n");
                 printf("                  -a to show system files\n");
                 printf("                  -1 to show a single name per line\n\n");
-                printf("      cat [-e] atari-name           Type file to console\n");
-                printf("                                    (-e to convert line ending from 0x9b to 0x0a)\n\n");
-                printf("      get atari-name [local-name]   Copy file from diskette to local-name\n\n");
-                printf("      put local-name [atari-name]   Copy file from local-name to diskette\n\n");
+                printf("      cat [-l] atari-name           Type file to console\n");
+                printf("                  -l to convert line ending from 0x9b to 0x0a\n\n");
+                printf("      get [-l] atari-name [local-name]\n");
+                printf("                                    Copy file from diskette to local-name\n");
+                printf("                  -l to convert line ending from 0x9b to 0x0a\n\n");
+                printf("      put local-name [atari-name]\n");
+                printf("                                    Copy file from local-name to diskette\n");
+                printf("                  -l to convert line ending from 0x0a to 0x9b\n\n");
                 printf("      free                          Print amount of free space\n\n");
                 printf("      rm atari-name                 Delete a file\n\n");
                 printf("      check                         Check filesystem\n\n");
@@ -1247,7 +1253,7 @@ int main(int argc, char *argv[])
                 return do_check();
 	} else if (!strcmp(argv[x], "cat")) {
 	        ++x;
-	        if (!strcmp(argv[x], "-e")) {
+	        if (x != argc && !strcmp(argv[x], "-l")) {
                         cvt_ending = 1;
                         ++x;
                 }
@@ -1262,6 +1268,10 @@ int main(int argc, char *argv[])
                 char *local_name;
                 char *atari_name;
                 ++x;
+	        if (x != argc && !strcmp(argv[x], "-l")) {
+                        cvt_ending = 1;
+                        ++x;
+                }
                 if (x == argc) {
                         printf("Missing file name to get\n");
                         return -1;
@@ -1275,6 +1285,10 @@ int main(int argc, char *argv[])
                 char *local_name;
                 char *atari_name;
                 ++x;
+	        if (x != argc && !strcmp(argv[x], "-l")) {
+                        cvt_ending = 1;
+                        ++x;
+                }
                 if (x == argc) {
                         printf("Missing file name to put\n");
                         return -1;
