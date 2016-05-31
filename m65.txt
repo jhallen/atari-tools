@@ -1,0 +1,80 @@
+Mac65 Token format, from http://joyfulcoder.net/atari/analog/?f=198805p27.html
+
+MAC65 token format:
+  FE FE		Indicates MAC65 tokenized source file
+  <word16> 	Indicates size of rest of file (not include this header)
+
+Each line:
+  <word16>	Line number
+  <byte8>	Line length (includes header)
+  <bytes>	Token data
+
+Token data:
+  Strings:
+     <byte8>	String length (bit 7 set, not including this byte)
+     <bytes>	String bytes
+
+  Something else: a byte less than 128:
+
+ 0* ..... "ERROR -"    32 ..... "JSR"    64 ........... "TSX"
+ 1 .......... ".IF"    33 ..... "JMP"    65 ........... "TXA"
+ 2 ........ ".ELSE"    34 ..... "DEC"    66 ........... "TXS"
+ 3 ....... ".ENDIF"    35 ..... "INC"    67 ........... "TYA"
+ 4 ....... ".MACRO"    36 ..... "LDX"    68 ........... "BCC"
+ 5 ........ ".ENDM"    37 ..... "LDY"    69 ........... "BCS"
+ 6 ....... ".TITLE"    38 ..... "STX"    70 ........... "BEQ"
+ 7* ............ ""    39 ..... "STY"    71 ........... "BMI"
+ 8 ........ ".PAGE"    40 ..... "CPX"    72 ........... "BNE"
+ 9 ........ ".WORD"    41 ..... "CPY"    73 ........... "BPL"
+10 ....... ".ERROR"    42 ..... "BIT"    74 ........... "BVC"
+11 ........ ".BYTE"    43 ..... "BRK"    75 ........... "BVS"
+12 ....... ".SBYTE"    44 ..... "CLC"    76 ........... "ORA"
+13 ....... ".DBYTE"    45 ..... "CLD"    77 ........... "AND"
+14 ......... ".END"    46 ..... "CLI"    78 ........... "EOR"
+15 ......... ".OPT"    47 ..... "CLV"    79 ........... "ADC"
+16 ......... ".TAB"    48 ..... "DEX"    80 ........... "STA"
+17 ..... ".INCLUDE"    49 ..... "DEY"    81 ........... "LDA"
+18 .......... ".DS"    50 ..... "INX"    82 ........... "CMP"
+19 ......... ".ORG"    51 ..... "INY"    83 ........... "SBC"
+20 ......... ".EQU"    52 ..... "NOP"    84 ........... "ASL"
+21 .......... "BRA"    53 ..... "PHA"    85 ........... "ROL"
+22 .......... "TRB"    54 ..... "PHP"    86 ........... "LSR"
+23 .......... "TSB"    55 ..... "PLA"    87 ........... "ROR"
+24 ....... ".FLOAT"    56 ..... "PLP"    88* ... Comment line
+25 ....... ".CBYTE"    57 ..... "RTI"    89 ........... "STZ"
+26 ............ ";"    58 ..... "RTS"    90 ........... "DEA"
+27 ....... ".LOCAL"    59 ..... "SEC"    91 ........... "INA"
+28 ......... ".SET"    60 ..... "SED"    92 ........... "PHX"
+29 ........... "*="    61 ..... "SEI"    93 ........... "PHY"
+30 ............ "="    62 ..... "TAX"    94 ........... "PLX"
+31 ........... ".="    63 ..... "TAY"    95 ........... "PLY"
+
+   88: Comment line: rest of line as plain ASCII
+    7: A macro name follows as a string (indent it a bit)
+
+After one of the tokens above, then rest of line uses these tokens:
+
+5* ....... "$"    28 ........ ">"    56 ............ ",Y"
+ 6* ....... "$"    29 ........ "<"    57 ............ ",X"
+ 7*                30 ........ "-"    58 ............. ")"
+ 8*                31 ........ "["    59* ............. ""
+10* ..... " ' "    32 ........ "]"    61 ............. ","
+11 ....... "%$"    36 ........ "!"    62 ............. "#"
+12 ........ "%"    37 ........ "^"    63 ............. "A"
+13 ........ "*"    39 ........ "\"    64 ............. "("
+18 ........ "+"    47 ..... ".REF"    65 ........... " " "
+19 ........ "-"    48 ..... ".DEF"    69 ............ "NO"
+20 ........ "*"    49 ..... ".NOT"    70 ........... "OBJ"
+21 ........ "/"    50 ..... ".AND"    71 ........... "ERR"
+22 ........ "&"    51 ...... ".OR"    72 ......... "EJECT"
+24 ........ "="    52 ........ "<"    73 .......... "LIST"
+25 ....... "<="    53 ........ ">"    74 .......... "XREF"
+26 ....... ">="    54 ...... ",X)"    75 ......... "MLIST"
+27 ....... "<>"    55 ...... "),Y"    76 ......... "CLIST"
+                                      77 ........... "NUM"
+5: word length hex constant, two bytes follow
+6: byte length hex constant, one byte follows
+7: word length decimal constant, two bytes follow
+8: byte length decimal constant, one byte follows
+10: single character constant: 'A
+59: beginning of comment field: rest of string is a comment
