@@ -6,6 +6,8 @@ Use atr2imd and imd2atr to convert between .atr disk images and .img disk
 images.  These are useful if you are trying to read Atari disks on an IBM PC
 using ImageDisk.
 
+Use detok to convert .m65 tokenized assembly source files to ASCII.
+
 ## atr
 
 Manipulate .atr disk image files.  Allows you to read, write or
