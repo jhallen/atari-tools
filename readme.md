@@ -14,16 +14,17 @@ Manipulate .atr disk image files.  Allows you to read, write or
 delete files in .atr disk images.
 
 ATR also provides a file system checker and will not crash when manipulating
-damaged images.  The filesystem checker verifies the following things:
+damaged images.  The filesystem checker verifies and fixes the following
+things:
 
-* That the file size field in the directory matches the number of sectors used by the file
-* That no files are marked as open
+* That the file size field in the directory entry matches the number of sectors used by the file (can fix)
+* That no files are marked as open (can fix)
 * That each file's sector linked list is not used by more than one file or is infinite
-* That directory entry number matches file number in sector linked list
+* That directory entry number matches file number in sector linked list (can fix)
 * That there are no directory entries used after the end of directory mark (which is the first directory entry marked as never used)
-* That VTOC version field is 2
-* That total sectors and free sectors fields in VTOC are correct
-* Reconstruct the allocation bitmap from files and verify that it matches VTOC bitmap
+* That VTOC version field is 2 (can fix)
+* That total sectors and free sectors fields in VTOC are correct (can fix)
+* Reconstruct the allocation bitmap from files and verify that it matches VTOC bitmap (can fix)
 
 ATR is for Cygwin or Linux (add 'b' flag to fopen()s for Windows).
 
@@ -70,6 +71,9 @@ is enhanced density.
       rm atari-name                 Delete a file
 
       check                         Check filesystem
+
+      fix                           Check and fix filesystem (prompts
+				    for each fix).
 
 
 Example of 'ls', result is sorted as in UNIX:
@@ -184,3 +188,18 @@ extender disables itself if it sees the DPMI provided by Windows):
 	copy /b CWSDSTUB.EXE+imd2atr imd2atr.exe
 
 	copy /b CWSDSTUB.EXE+atr2imd atr2imd.exe
+
+## detok
+
+This utility converts Mac65 tokenized assembly language source file into
+ASCII and prints the result on the standard output.
+
+
+### Compile
+
+	cc -o detok detok.c
+
+### Syntax
+
+	detok source.m65
+

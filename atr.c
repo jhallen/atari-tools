@@ -207,12 +207,34 @@ int count_free(unsigned char *bitmap, int len)
         return count;
 }
 
+/* Fix it? */
+
+int fix;
+
+int fixit()
+{
+        if (!fix)
+                return 0;
+        for (;;) {
+                char buf[80];
+                printf("Fix it (y,n)? ");
+                fflush(stdout);
+                if (fgets(buf,sizeof(buf),stdin)) {
+                        if (buf[0] == 'y' || buf[0] == 'Y')
+                                return 1;
+                        else if (buf[0] == 'n' || buf[0] == 'N')
+                                return 0;
+                }
+        }
+}
+
 /* Get allocation bitmap */
 
 void getbitmap(unsigned char *bitmap, int check)
 {
         unsigned char vtoc[SECTOR_SIZE];
         unsigned char vtoc2[SECTOR_SIZE];
+        int upd = 0;
 
         if (getsect(vtoc, SECTOR_VTOC)) {
                 printf(" (trying to read VTOC)\n");
@@ -228,6 +250,11 @@ void getbitmap(unsigned char *bitmap, int check)
                 printf("  Checking that VTOC unused count matches bitmap...\n");
                 if (count != vtoc_count) {
                         printf("    ** It doesn't match: bitmap has %d free, but VTOC count is %d\n", count, vtoc_count);
+                        if (fixit()) {
+                                vtoc[VTOC_NUM_UNUSED] = (0xFF & count);
+                                vtoc[VTOC_NUM_UNUSED + 1] = (0xFF & (count >> 8));
+                                upd = 1;
+                        }
                 } else {
                         printf("    It's OK (count is %d)\n", count);
                 }
@@ -236,15 +263,31 @@ void getbitmap(unsigned char *bitmap, int check)
                 else
                         expected_size = 707;
                 printf("  Checking that VTOC usable sector count is %d...\n", expected_size);
-                if (vtoc_total != expected_size)
+                if (vtoc_total != expected_size) {
                         printf("    ** It's wrong, we found: %d\n", vtoc_total);
-                else
+                        if (fixit()) {
+                                vtoc[VTOC_NUM_SECTS] = (0xFF & expected_size);
+                                vtoc[VTOC_NUM_SECTS + 1] = (0xFF & (expected_size >> 8));
+                                upd = 1;
+                        }
+                } else
                         printf("    It's OK\n");
                 printf("  Checking that VTOC type code is 2...\n");
                 if (vtoc[VTOC_TYPE] == 2)
                         printf("    It's OK\n");
-                else
+                else {
                         printf("    ** It's wrong, we found: %d\n", vtoc[VTOC_TYPE]);
+                        if (fixit()) {
+                                vtoc[VTOC_TYPE] = 2;
+                                upd = 1;
+                        }
+                }
+                if (upd) {
+                        printf("Saving VTOC1 fixes...\n");
+                        putsect(vtoc, SECTOR_VTOC);
+                        printf("  done.\n");
+                        upd = 0;
+                }
         }
 
         if (disk_size == ED_DISK_SIZE) {
@@ -263,8 +306,19 @@ void getbitmap(unsigned char *bitmap, int check)
                         printf("  Checking that VTOC2 unused count matches bitmap...\n");
                         if (count != vtoc2_count) {
                                 printf("    ** It doesn't match: bitmap has %d free, but VTOC2 count is %d\n", count, vtoc2_count);
+                                if (fixit()) {
+                                        vtoc2[VTOC2_NUM_UNUSED] = (count & 0xFF);
+                                        vtoc2[VTOC2_NUM_UNUSED + 1] = (0xFF & (count >> 8));
+                                        upd = 1;
+                                }
                         } else {
                                 printf("    It's OK (count is %d)\n", count);
+                        }
+                        if (upd) {
+                                printf("Saving VTOC2 fixes...\n");
+                                putsect(vtoc2, SECTOR_VTOC2);
+                                printf("  done.\n");
+                                upd = 0;
                         }
                 }
         }
@@ -653,23 +707,30 @@ int do_free(void)
 
 /* Check a single file */
 
-void check_file(struct dirent *d, int y, int x, char *map, char *name[])
+int check_file(struct dirent *d, int y, int x, char *map, char *name[])
 {
         unsigned char fbuf[SECTOR_SIZE];
         char *filename = strdup(getname(d));
+        int upddir = 0;
         int sector;
         int sects;
         int count = 0;
+        int upd = 0;
         int file_no = (y / ENTRY_SIZE) + ((x - SECTOR_DIR) * SECTOR_SIZE / ENTRY_SIZE);
         sector = (d->start_hi << 8) + d->start_lo;
         sects = (d->count_hi << 8) + d->count_lo;
         printf("Checking %s (file_no %d)\n", filename, file_no);
         if (d->flag & FLAG_OPENED) {
                 printf("  ** Warning: file is marked as opened\n");
+                if (fixit()) {
+                        d->flag &= ~FLAG_OPENED;
+                        upddir = 1;
+                }
         }
         do {
                 int next;
                 int sector_file_no;
+                ++count;
                 if (count == 2048) {
                         printf(" (file too long)\n");
                         break;
@@ -681,21 +742,39 @@ void check_file(struct dirent *d, int y, int x, char *map, char *name[])
                 if (map[sector] != -1) {
                         printf("  ** Uh oh.. sector %d already in use by %s (%d)\n", sector, name[sector] ? name[sector] : "reserved", map[sector]);
                 }
-                map[sector] = file_no;
-                name[sector] = filename;
-                ++count;
-                next = (int)fbuf[DATA_NEXT_LOW] + ((int)(0x3 & fbuf[DATA_NEXT_HIGH]) << 8);
-                sector_file_no = ((int)fbuf[DATA_FILE_NUM] >> 2);
-                if (sector_file_no != file_no) {
-                        printf("  ** Warning: Sector %d claims to belong to file %d\n", sector, sector_file_no);
+                if (map[sector] == file_no) {
+                        printf("  ** Warning: Infinite linked list detected\n");
+                        break;
+                } else {
+                        map[sector] = file_no;
+                        name[sector] = filename;
+                        next = (int)fbuf[DATA_NEXT_LOW] + ((int)(0x3 & fbuf[DATA_NEXT_HIGH]) << 8);
+                        sector_file_no = ((int)fbuf[DATA_FILE_NUM] >> 2);
+                        if (sector_file_no != file_no) {
+                                printf("  ** Warning: Sector %d claims to belong to file %d\n", sector, sector_file_no);
+                                if (fixit()) {
+                                        fbuf[DATA_FILE_NUM] = (fbuf[DATA_FILE_NUM] & 0x3) | (file_no << 2);
+                                        upd = 1;
+                                }
+                        }
+                }
+                if (upd) {
+                        putsect(fbuf, sector);
+                        upd = 0;
                 }
                 sector = next;
         } while (sector);
         if (count != sects) {
                 printf("  ** Warning: size in directory (%d) does not match size on disk (%d) for file %s\n",
                        sects, count, filename);
+                if (fixit()) {
+                        d->count_hi = (0xFF & (count >> 8));
+                        d->count_lo = (0xFF & count);
+                        upddir = 1;
+                }
         }
         printf("  Found %d sectors\n", count);
+        return upddir;
 }
 
 /* Check disk: regen bit map */
@@ -712,7 +791,7 @@ int do_check()
         char *name[ED_DISK_SIZE];
 
         /* Mark all as free */
-        for (x = 0; x != disk_size; ++x) {
+        for (x = 0; x != ED_DISK_SIZE; ++x) {
                 map[x] = -1;
                 name[x] = 0;
         }
@@ -733,6 +812,7 @@ int do_check()
         /* Step through each file */
         for (x = SECTOR_DIR; x != SECTOR_DIR + SECTOR_DIR_SIZE; ++x) {
                 int y;
+                int upd = 0;
                 if (getsect(buf, x)) {
                         printf(" (reading directory)\n");
                         exit(-1);
@@ -747,8 +827,13 @@ int do_check()
                                         printf("** Error: found in use directory entry after end of directory mark:\n");
                                         found_eod = 2;
                                 }
-                                check_file(d, y, x, map, name);
+                                upd |= check_file(d, y, x, map, name);
                         }
+                }
+                if (upd) {
+                        printf("Writing back modified directory sector...\n");
+                        putsect(buf, x);
+                        printf("  done.\n");
                 }
         }
         done:
@@ -786,6 +871,16 @@ int do_check()
         }
         if (ok) {
                 printf("  It's OK.\n");
+        } else if (fixit()) {
+                memset(bitmap, 0xFF, ED_BITMAP_SIZE);
+                for (x = 0; x != ED_DISK_SIZE; ++x) {
+                        if (map[x] != -1) {
+                                bitmap[x >> 3] &= ~(1 << (7 - (x & 7)));
+                        }
+                }
+                printf("Updating allocation bitmap...\n");
+                putbitmap(bitmap);
+                printf("  done.\n");
         }
         printf("All done.\n");
         return 0;
@@ -1190,7 +1285,7 @@ int main(int argc, char *argv[])
 	char *disk_name;
 	x = 1;
 	if (x == argc || !strcmp(argv[x], "--help") || !strcmp(argv[x], "-h")) {
-                printf("\nAtari DOS diskette access\n");
+                printf("\nAtari DOS 2.0s and DOS 2.5 diskette access\n");
                 printf("\n");
                 printf("Syntax: atr path-to-diskette [command] [args]\n");
                 printf("\n");
@@ -1209,7 +1304,9 @@ int main(int argc, char *argv[])
                 printf("                  -l to convert line ending from 0x0a to 0x9b\n\n");
                 printf("      free                          Print amount of free space\n\n");
                 printf("      rm atari-name                 Delete a file\n\n");
-                printf("      check                         Check filesystem\n\n");
+                printf("      check                         Check filesystem (read only)\n\n");
+                printf("      fix                           Check and fix filesystem (prompts\n");
+                printf("                                    for each fix).\n");
                 return -1;
 	}
 	disk_name = argv[x++];
@@ -1269,6 +1366,9 @@ int main(int argc, char *argv[])
         } else if (!strcmp(argv[x], "free")) {
                 return do_free();
         } else if (!strcmp(argv[x], "check")) {
+                return do_check();
+        } else if (!strcmp(argv[x], "fix")) {
+                fix = 1;
                 return do_check();
 	} else if (!strcmp(argv[x], "cat")) {
 	        ++x;
