@@ -14,7 +14,16 @@ Manipulate .atr disk image files.  Allows you to read, write or
 delete files in .atr disk images.
 
 ATR also provides a file system checker and will not crash when manipulating
-damaged images.
+damaged images.  The filesystem checker verifies the following things:
+
+* That the file size field in the directory matches the number of sectors used by the file
+* That no files are marked as open
+* That each file's sector linked list is not used by more than one file or is infinite
+* That directory entry number matches file number in sector linked list
+* That there are no directory entries used after the end of directory mark (which is the first directory entry marked as never used)
+* That VTOC version field is 2
+* That total sectors and free sectors fields in VTOC are correct
+* Reconstruct the allocation bitmap from files and verify that it matches VTOC bitmap
 
 ATR is for Cygwin or Linux (add 'b' flag to fopen()s for Windows).
 

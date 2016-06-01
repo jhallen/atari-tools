@@ -651,16 +651,63 @@ int do_free(void)
         return 0;
 }
 
+/* Check a single file */
+
+void check_file(struct dirent *d, int y, int x, char *map, char *name[])
+{
+        unsigned char fbuf[SECTOR_SIZE];
+        char *filename = strdup(getname(d));
+        int sector;
+        int sects;
+        int count = 0;
+        int file_no = (y / ENTRY_SIZE) + ((x - SECTOR_DIR) * SECTOR_SIZE / ENTRY_SIZE);
+        sector = (d->start_hi << 8) + d->start_lo;
+        sects = (d->count_hi << 8) + d->count_lo;
+        printf("Checking %s (file_no %d)\n", filename, file_no);
+        if (d->flag & FLAG_OPENED) {
+                printf("  ** Warning: file is marked as opened\n");
+        }
+        do {
+                int next;
+                int sector_file_no;
+                if (count == 2048) {
+                        printf(" (file too long)\n");
+                        break;
+                }
+                if (getsect(fbuf, sector)) {
+                        printf(" (reading file)\n");
+                        exit(-1);
+                }
+                if (map[sector] != -1) {
+                        printf("  ** Uh oh.. sector %d already in use by %s (%d)\n", sector, name[sector] ? name[sector] : "reserved", map[sector]);
+                }
+                map[sector] = file_no;
+                name[sector] = filename;
+                ++count;
+                next = (int)fbuf[DATA_NEXT_LOW] + ((int)(0x3 & fbuf[DATA_NEXT_HIGH]) << 8);
+                sector_file_no = ((int)fbuf[DATA_FILE_NUM] >> 2);
+                if (sector_file_no != file_no) {
+                        printf("  ** Warning: Sector %d claims to belong to file %d\n", sector, sector_file_no);
+                }
+                sector = next;
+        } while (sector);
+        if (count != sects) {
+                printf("  ** Warning: size in directory (%d) does not match size on disk (%d) for file %s\n",
+                       sects, count, filename);
+        }
+        printf("  Found %d sectors\n", count);
+}
+
 /* Check disk: regen bit map */
 
 int do_check()
 {
         unsigned char bitmap[ED_BITMAP_SIZE];
         unsigned char buf[SECTOR_SIZE];
-        unsigned char fbuf[SECTOR_SIZE];
         int x, y;
         int total;
         int ok;
+        int found_eod = 0;
         char map[ED_DISK_SIZE];
         char *name[ED_DISK_SIZE];
 
@@ -692,43 +739,15 @@ int do_check()
                 }
                 for (y = 0; y != SECTOR_SIZE; y += ENTRY_SIZE) {
                         struct dirent *d = (struct dirent *)(buf + y);
-                        /* OSS OS/A+ disks put junk after first never used directory entry */
-                        if (!(d->flag & (FLAG_IN_USE | FLAG_DELETED)))
-                                goto done;
+                        if (!(d->flag & (FLAG_IN_USE | FLAG_DELETED))) {
+                                found_eod = 1;
+                        }
                         if (d->flag & FLAG_IN_USE) {
-                                char *filename = strdup(getname(d));
-                                int sector;
-                                int sects;
-                                int count = 0;
-                                int file_no = (y / ENTRY_SIZE) + ((x - SECTOR_DIR) * SECTOR_SIZE / ENTRY_SIZE);
-                                sector = (d->start_hi << 8) + d->start_lo;
-                                sects = (d->count_hi << 8) + d->count_lo;
-                                printf("Checking %s (file_no %d)\n", filename, file_no);
-                                do {
-                                        int next;
-                                        if (count == 2048) {
-                                                printf(" (file too long)\n");
-                                                break;
-                                        }
-                                        if (getsect(fbuf, sector)) {
-                                                printf(" (reading file)\n");
-                                                exit(-1);
-                                        }
-                                        if (map[sector] != -1) {
-                                                printf("  ** Uh oh.. sector %d already in use by %s (%d)\n", sector, name[sector] ? name[sector] : "reserved", map[sector]);
-                                        }
-                                        map[sector] = file_no;
-                                        name[sector] = filename;
-                                        ++count;
-                                        next = (int)fbuf[DATA_NEXT_LOW] + ((int)(0x3 & fbuf[DATA_NEXT_HIGH]) << 8);
-
-                                        sector = next;
-                                } while (sector);
-                                if (count != sects) {
-                                        printf("  ** Warning: size in directory (%d) does not match size on disk (%d) for file %s\n",
-                                               sects, count, filename);
+                                if (found_eod == 1) {
+                                        printf("** Error: found in use directory entry after end of directory mark:\n");
+                                        found_eod = 2;
                                 }
-                                printf("  Found %d sectors\n", count);
+                                check_file(d, y, x, map, name);
                         }
                 }
         }
