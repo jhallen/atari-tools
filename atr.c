@@ -974,6 +974,13 @@ int do_check()
         char map[ED_DISK_SIZE];
         char *name[ED_DISK_SIZE];
 
+        if (disk_size == ED_DISK_SIZE)
+                printf("Checking DOS 2.5 enhanced density disk...\n");
+        else if (disk_dd)
+                printf("Checking DOS 2.0d double density disk...\n");
+        else
+                printf("Checking DOS 2.0s single density disk...\n");
+
         /* Mark all as free */
         for (x = 0; x != ED_DISK_SIZE; ++x) {
                 map[x] = -1;
@@ -1517,7 +1524,7 @@ int main(int argc, char *argv[])
                 return -1;
 	}
 	disk_name = argv[x++];
-	if (!strcmp(argv[x], "mkfs")) {
+	if (argv[x] && !strcmp(argv[x], "mkfs")) {
 	        /* Create a filesystem */
 	        int type = 0;
 	        int size;
