@@ -916,6 +916,7 @@ int check_file(struct dirent *d, int y, int x, char *map, char *name[])
                         status = 1;
                         break;
                 } else {
+                        int dsize;
                         map[sector] = file_no;
                         name[sector] = filename;
                         next = (int)fbuf[data_next_low] + ((int)(0x3 & fbuf[data_next_high]) << 8);
@@ -926,6 +927,16 @@ int check_file(struct dirent *d, int y, int x, char *map, char *name[])
                                 if (fixit()) {
                                         fbuf[data_file_num] = (fbuf[data_file_num] & 0x3) | (file_no << 2);
                                         upd = 1;
+                                }
+                        }
+                        dsize = (int)fbuf[data_bytes];
+                        if (next) {
+                                if (dsize != data_size) {
+                                        fprintf(stderr, "  ** Warning: Sector %d is short\n", sector);
+                                }
+                        } else {
+                                if (dsize == 0) {
+                                        fprintf(stderr, "  ** Warning: Sector %d (last sector of file) is empty\n", sector);
                                 }
                         }
                 }
@@ -1501,10 +1512,101 @@ int main(int argc, char *argv[])
                 printf("      rm atari-name                 Delete a file\n\n");
                 printf("      check                         Check filesystem (read only)\n\n");
                 printf("      fix                           Check and fix filesystem (prompts\n");
-                printf("                                    for each fix).\n");
+                printf("                                    for each fix).\n\n");
+                printf("      mkfs dos2.0s|dos2.0d|dos2.5   Write a new filesystem\n");
                 return -1;
 	}
 	disk_name = argv[x++];
+	if (!strcmp(argv[x], "mkfs")) {
+	        /* Create a filesystem */
+	        int type = 0;
+	        int size;
+	        int n;
+	        unsigned char hdr[16];
+	        unsigned char bf[256];
+	        unsigned char bitmap[ED_BITMAP_SIZE];
+	        ++x;
+	        if (argv[x] && !strcmp(argv[x], "dos2.0s"))
+	                type = 1;
+                else if (argv[x] && !strcmp(argv[x], "dos2.5"))
+                        type = 2;
+                else if (argv[x] && !strcmp(argv[x], "dos2.0d"))
+                        type = 3;
+                else {
+                        fprintf(stderr, "Unknown format\n");
+                        return -1;
+                }
+                disk = fopen(disk_name, "w+");
+                if (!disk) {
+                        fprintf(stderr, "Couldn't open '%s'\n", disk_name);
+                        return -1;
+                }
+                /* .ATR header */
+                memset(hdr, 0, 16);
+                hdr[0] = 0x96;
+                hdr[1] = 0x02;
+                switch (type) {
+                        case 1: {
+                                disk_size = SD_DISK_SIZE;
+                                size = 40*18*128;
+                                hdr[2] = size/16;
+                                hdr[3] = size/16/256;
+                                hdr[4] = 0x80;
+                                hdr[5] = 0x00;
+                                break;
+                        } case 2: {
+                                disk_size = ED_DISK_SIZE;
+                                size = 40*26*128;
+                                hdr[2] = size/16;
+                                hdr[3] = size/16/256;
+                                hdr[4] = 0x80;
+                                hdr[5] = 0x00;
+                                break;
+                        } case 3: {
+                                disk_size = DD_DISK_SIZE;
+                                set_density(1);
+                                size = 40*18*256 - 3*128;
+                                hdr[2] = size/16;
+                                hdr[3] = size/16/256;
+                                hdr[4] = 0x00;
+                                hdr[5] = 0x01;
+                                break;
+                        }
+                }
+                if (16 != fwrite(hdr, 1, 16, disk)) {
+                        fprintf(stderr, "Couldn't write to '%s'\n", disk_name);
+                        return -1;
+                }
+                memset(bf, 0, 256);
+                for (n = 0; n != size; n += 128) {
+                        if (128 != fwrite(bf, 1, 128, disk)) {
+                                fprintf(stderr, "Couldn't write to '%s'\n", disk_name);
+                                return -1;
+                        }
+                }
+                /* VTOC */
+                bf[0] = 2;
+                if (disk_size == ED_DISK_SIZE) {
+                        bf[1] = (255 & 1010);
+                        bf[2] = 1010/256;
+                } else {
+                        bf[1] = (255 & 707);
+                        bf[2] = 707/256;
+                }
+                putsect(bf, SECTOR_VTOC);
+                memset(bitmap, 0xFF, ED_BITMAP_SIZE);
+                mark_space(bitmap, 0, 1); /* Sector zero */
+                mark_space(bitmap, 1, 1); /* Boot sectors */
+                mark_space(bitmap, 2, 1);
+                mark_space(bitmap, 3, 1);
+                mark_space(bitmap, SECTOR_VTOC, 1); /* VTOC */
+                for (n = 0; n != SECTOR_DIR_SIZE; ++n) /* DIR */
+                        mark_space(bitmap, SECTOR_DIR + n, 1);
+                mark_space(bitmap, 720, 1); /* Reserved */
+                putmap(bitmap);
+                fclose(disk);
+                return 0;
+	}
 	disk = fopen(disk_name, "r+");
 	if (!disk) {
 	        fprintf(stderr, "Couldn't open '%s'\n", disk_name);

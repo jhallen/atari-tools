@@ -93,7 +93,9 @@ short).
       check                         Check filesystem
 
       fix                           Check and fix filesystem (prompts
-				    for each fix).
+                                    for each fix).
+
+      mkfs dos2.0s|dos2.5|dos2.0d   Create new empty filesystem (deletes image)
 
 
 Example of 'ls', result is sorted as in UNIX:
