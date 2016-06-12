@@ -1,14 +1,16 @@
 # Atari Disk Tools
 
-Use atr to manipulate .atr disk image files.
+[TOC]
 
-Use atr2imd and imd2atr to convert between .atr disk images and .img disk
+Use ATR to manipulate .atr disk image files.
+
+Use ATR2IMD and IMD2ATR to convert between .atr disk images and .img disk
 images.  These are useful if you are trying to read Atari disks on an IBM PC
 using ImageDisk.
 
 Use detok to convert .m65 tokenized assembly source files to ASCII.
 
-## atr
+## ATR
 
 Manipulate .atr disk image files.  Allows you to read, write or
 delete files in .atr disk images.
@@ -26,12 +28,11 @@ things:
 * That total sectors and free sectors fields in VTOC are correct (can fix)
 * Reconstruct the allocation bitmap from files and verify that it matches VTOC bitmap (can fix)
 
-
 ATR is for Cygwin or Linux (add 'b' flag to fopen()s for Windows).
 
 ### Image formats
 
-ATR handles DOS 2.0S single density images.  These images should normally be
+ATR handles DOS 2.0s single density images.  These images should normally be
 92,176 bytes (16 byte .atr header + 40 tracks * 18 sectors per track * 128
 bytes per sector), but ATR assumes that any image below 131,088 is single
 density.  131,088 is the smallest viable enhanced density image.
@@ -40,6 +41,11 @@ ATR also handles DOS 2.5 enhanced density images.  These images should
 normally be 133,136 bytes (16 byte .atr header + 40 tracks * 26 sectors per
 track * 128 bytes per sector), but ATR assumes that any image below 183,952
 is enhanced density.
+
+ATR also handles DOS 2.0d double density images.  These images should
+normally be 183,952 bytes (16 byte .atr header + 40 track * 18 sectors per
+track * 256 bytes per sector - 384 bytes because first three sectors are
+short).
 
 ### Compile
 
@@ -151,22 +157,22 @@ Example of 'check':
 	  It's OK.
 	All done.
 
-## atr2imd
+## ATR2IMD
 
 Convert Nick Kennedy's .ATR (Atari) disk image file format to
 Dave Dunfield's .IMD (ImageDisk) file format
 
-
-## imd2atr
-
-Convert Nick Kennedy's .ATR (Atari) disk image file format to
-Dave Dunfield's .IMD (ImageDisk) file format
-
-
-You could use these to read and write Atari 800 disks using an IBM PC floppy
+You could use this to write Atari 800 disks using an IBM PC floppy
 drive with ImageDisk.  Note however that the floppy drive should be adjusted
 for 288 RPM instead of 300 RPM.
 
+## IMD2ATR
+
+Convert Dave Dunfield's .IMD (ImageDisk) disk image file format to Nick
+Kennedy's .ATR (Atari) disk image file format.
+
+You could use this to read Atari 800 disks using an IBM PC floppy
+drive with ImageDisk.
 
 ### Compiling instructions
 
