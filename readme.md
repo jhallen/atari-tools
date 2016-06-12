@@ -6,7 +6,7 @@
   * [Compiling instructions](#atr-compiling-instructions)<br>
   * [Syntax](#atr-syntax)<br>
   * [Commands](#commands)<br>
-  * [Filesystem technical descriptions](#filesystem)<br>
+  * [Filesystem technical descriptions](#filesystem-format)<br>
 * [ATR2IMD](#atr2imd)<br>
 * [IMD2ATR](#imd2atr)<br>
   * [Compiling instructions](#imd2atr-compiling-instructions)<br>
@@ -169,7 +169,7 @@ Example of 'check':
 	  It's OK.
 	All done.
 
-## Filesystem technical descriptions
+## Filesystem format
 
 ### DOS 2.0S single density
 
@@ -209,6 +209,10 @@ Directory entry: (8 entries per 128 byte sector):
 * 3..4: starting sector number
 * 5..12: 8 byte file name
 * 13..15: 3 byte extension
+
+When DOS 2.0s searches for a file, it stops searching when it encounters the
+first directory entry which has never been used (flag byte bits 6 and 7 both
+0).
 
 Data sectors:
 * 0..124:   Contain data
