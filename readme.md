@@ -3,12 +3,17 @@
 [TOC]
 
 [ATR](#atr)
-
+[  Image Formats](#image-formats)
+[  Compiling instructions](#compiling-instructions-1)
+[  Syntax](#syntax-1)
+[  Commands](#commands)
 [ATR2IMD](#atr2imd)
 
 [IMD2ATR](#imd2atr)
-
+[  Compiling instructions](#compiling-instructions-2)
 [detok](#detok)
+[  Compiling instructions](#compiling-instructions-3)
+[  Syntax](#syntax-2)
 
 Use ATR to manipulate .atr disk image files.
 
@@ -38,7 +43,7 @@ things:
 
 ATR is for Cygwin or Linux (add 'b' flag to fopen()s for Windows).
 
-### Image formats
+## Image formats
 
 ATR handles DOS 2.0s single density images.  These images should normally be
 92,176 bytes (16 byte .atr header + 40 tracks * 18 sectors per track * 128
@@ -55,11 +60,11 @@ normally be 183,952 bytes (16 byte .atr header + 40 track * 18 sectors per
 track * 256 bytes per sector - 384 bytes because first three sectors are
 short).
 
-### Compile
+## Compiling instructions
 
 	cc -o atr atr.c
 
-### Syntax
+## Syntax
 
 	atr path-to-diskette command [options] args
 
@@ -182,7 +187,7 @@ Kennedy's .ATR (Atari) disk image file format.
 You could use this to read Atari 800 disks using an IBM PC floppy
 drive with ImageDisk.
 
-### Compiling instructions
+## Compiling instructions
 
 I use the DJGPP 32-bit GNU-C based compiler: http://www.delorie.com/djgpp/
 (so you need a 386 or better machine to run these on)
@@ -210,11 +215,11 @@ This utility converts Mac65 tokenized assembly language source file into
 ASCII and prints the result on the standard output.
 
 
-### Compile
+## Compile
 
 	cc -o detok detok.c
 
-### Syntax
+## Syntax
 
 	detok source.m65
 
