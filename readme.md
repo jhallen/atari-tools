@@ -1,27 +1,17 @@
 # Atari Disk Tools
 
 
-[ATR](#atr)
-
-[  Image Formats](#image-formats)
-
-[  Compiling instructions](#atr-compiling-instructions)
-
-[  Syntax](#atr-syntax)
-
-[  Commands](#commands)
-
-[ATR2IMD](#atr2imd)
-
-[IMD2ATR](#imd2atr)
-
-[  Compiling instructions](#imd2atr-compiling-instructions)
-
-[detok](#detok)
-
-[  Compiling instructions](#detok-compiling-instructions)
-
-[  Syntax](#detok-syntax)
+[ATR](#atr)<br>
+[  Image Formats](#image-formats)<br>
+[  Compiling instructions](#atr-compiling-instructions)<br>
+[  Syntax](#atr-syntax)<br>
+[  Commands](#commands)<br>
+[ATR2IMD](#atr2imd)<br>
+[IMD2ATR](#imd2atr)<br>
+[  Compiling instructions](#imd2atr-compiling-instructions)<br>
+[detok](#detok)<br>
+[  Compiling instructions](#detok-compiling-instructions)<br>
+[  Syntax](#detok-syntax)<br>
 
 Use ATR to manipulate .atr disk image files.
 
