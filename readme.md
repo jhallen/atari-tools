@@ -275,9 +275,10 @@ index to the directory entry which owns the file.
 Unlike some file systems, for example CP/M, the exact file size is known
 since each sector has a byte indicating the number of used bytes in it.
 
-According to
-(Inside Atari DOS)[http://www.atariarchives.org/iad/],
-any sector can be short, not just the last.
+According to Inside Atari DOS, any sector can be short, not just the last
+one:
+
+(Inside Atari DOS)[http://www.atariarchives.org/iad/]
 
 ### DOS 2.5 Enhanced density
 
@@ -354,9 +355,9 @@ Data sectors:
 
 ### Boot sectors
 
-See
+See Inside Atari DOS - The Boot Process for details:
+
 (Inside Atari DOS - The Boot Process)[http://www.atariarchives.org/iad/chapter20.php]
-for details.
 
 # ATR2IMD
 
