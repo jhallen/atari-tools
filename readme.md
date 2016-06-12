@@ -2,16 +2,16 @@
 
 
 * [ATR](#atr)<br>
-  * [  Image Formats](#image-formats)<br>
-  * [  Compiling instructions](#atr-compiling-instructions)<br>
-  * [  Syntax](#atr-syntax)<br>
-  * [  Commands](#commands)<br>
+  * [Image Formats](#image-formats)<br>
+  * [Compiling instructions](#atr-compiling-instructions)<br>
+  * [Syntax](#atr-syntax)<br>
+  * [Commands](#commands)<br>
 * [ATR2IMD](#atr2imd)<br>
 * [IMD2ATR](#imd2atr)<br>
-  * [  Compiling instructions](#imd2atr-compiling-instructions)<br>
+  * [Compiling instructions](#imd2atr-compiling-instructions)<br>
 * [detok](#detok)<br>
-  * [  Compiling instructions](#detok-compiling-instructions)<br>
-  * [  Syntax](#detok-syntax)<br>
+  * [Compiling instructions](#detok-compiling-instructions)<br>
+  * [Syntax](#detok-syntax)<br>
 
 Use ATR to manipulate .atr disk image files.
 
@@ -185,7 +185,7 @@ Kennedy's .ATR (Atari) disk image file format.
 You could use this to read Atari 800 disks using an IBM PC floppy
 drive with ImageDisk.
 
-## ATR Compiling instructions
+## IMD2ATR Compiling instructions
 
 I use the DJGPP 32-bit GNU-C based compiler: http://www.delorie.com/djgpp/
 (so you need a 386 or better machine to run these on)
