@@ -6,6 +6,7 @@
   * [Compiling instructions](#atr-compiling-instructions)<br>
   * [Syntax](#atr-syntax)<br>
   * [Commands](#commands)<br>
+  * [Filesystem technical descriptions](#filesystem)<br>
 * [ATR2IMD](#atr2imd)<br>
 * [IMD2ATR](#imd2atr)<br>
   * [Compiling instructions](#imd2atr-compiling-instructions)<br>
@@ -167,6 +168,126 @@ Example of 'check':
 	Compare VTOC bitmap with reconstructed bitmap from files...
 	  It's OK.
 	All done.
+
+## Filesystem technical descriptions
+
+### DOS 2.0S single density
+
+40 tracks, 18 sectors, 128 byte sectors: 92160 bytes
+
+Drive numbers sectors 1..720 but allocation map numbers sectors
+0..719.  Since there is no sector 0, it's always marked in-use in the
+allocation map.  Sector 720 can not be allocated since there is no
+allocation map bit for it.
+
+Boot sectors = 1..3.  These are allocated and written on newly
+formatted disks even if there is no dos.sys.
+
+VTOC sector = 360 (0x168)
+
+Directory sectors = 361..368 (0x169..0x170)
+
+Out of reach sector = 720 (no bitmap bit for it)
+
+VTOC:
+* 0: DOS version code:  2 for Atari DOS 2.0
+* 1..2: Initial number of free sectors in allocation map. Excludes pre-allocated sectors including sector 0, boot, VTOC, and directory.  Should be 707.
+* 3..4: Current number of free sectors 0..707
+* 5..9: unused
+* 10..99: allocation bitmap for sectors 0..719.  0 means in use.
+* 100-127: unused
+
+Directory entry: (8 entries per 128 byte sector):
+
+* 0: flag byte (0 means unused, 0x42 means in use)
+  * bit 0: opened for output
+  * bit 1: created by DOS 2
+  * bit 5: file locked
+  * bit 6: this entry in use
+  * bit 7: this entry has been deleted
+* 1..2: number of sectors in file
+* 3..4: starting sector number
+* 5..12: 8 byte file name
+* 13..15: 3 byte extension
+
+Data sectors:
+* 0..124:   Contain data
+* 125: File number in upper 6 bits.  Upper 2 bits of next  sector number in lower two bits.
+* 126: Lower 8 bits of next sector number.
+* 127: Number of data bytes in sector: Usually 125 except for last sector
+
+### DOS 2.5 Enhanced density
+
+40 tracks, 26 sectors, 128 byte sectors: 133120 bytes
+
+Drive numbers sectors 1..1040 but allocation map numbers sectors
+0..1023.  Since there is no sector 0, it's always marked in-use in the
+allocation map.  Out of reach sector 1024 is used for VTOC2.  Sectors
+1025..1040 not used because next sector number is only 10 bits.
+
+Note: on new disks, DOS 2.5 allocates sector 720 even though it is not used
+for anything.  I think this is to enhance backward compatibility with DOS 2.0s
+(where some programs might use sector 720, knowing that the OS will not normally use
+use it).
+
+Boot sectors = 1..3.  These are allocated and written on newly formatted disks even if there is no dos.sys written.
+
+VTOC sector = 360 (0x168)
+
+Directory sectors = 361..368
+
+VTOC2 = 1024 (has more bitmap bits)
+
+Out of reach sectors = 1024..1040 (because next sector number is 10 bits).
+
+VTOC: Same as 2.0s, except:
+
+Initial number of free sectors in allocation map.  Excludes pre-allocated
+sector 0, boot, VTOC, directory and sector 720.  Should be 1010 but 1011
+is probably OK as well (for a format without pre-allocating 720).
+
+Current number of free sectors below 720.  Should be 707 on a new disk since
+sector 0, boot sectors, VTOC and directory sectors are pre-allocated.
+
+VTOC2:
+* 0..83: Repeat VTOC bitmap for sectors 48..719 (write these, do not read them)
+* 84..121: Bitmap for sectors 720..1023
+* 122..123: Current number of free sectors above sector 719.  Should be 303 on a new disk because sector 720 is pre-allocated.
+* 124..127: Unused.
+
+Directory: same as DOS 2.0s
+
+Data sectors: same as DOS 2.0s
+
+### DOS 2.0d Double density
+
+40 tracks, 18 sectors, 256 byte sectors:
+
+184320 - 384 = 183936 bytes (subtract 384 because first three sectors have 128 bytes).
+
+Sector numbering: Same as DOS 2.0s
+
+Boot sectors = 1..3 Only first 128 bytes of each used even though on the disk they
+are 256 bytes.  Usually these sectors use 128 bytes in the .ATR file, but not
+always.
+
+VTOC sector = 360 (0x168)
+
+Directory sectors = 361..368 (0x169..0x170)
+
+Out of reach sector = 720 (out of reach because no bitmap bit for it)
+
+VTOC: Same as DOS 2.0s, except balance of 256 byte sector is left unused.
+
+Directory: Same as DOS 2.0s.  Note that each directory sector has 8
+entries even though 16 would fit.  Bytes 128 - 255 of each directory sector
+are left unused.
+
+Data sectors:
+* 0..252: Contain data
+* 253: File number in upper 6 bits.  Upper 2 bits of next  sector number in lower two bits.
+* 254: Lower 8 bits of next sector number.
+* 255: Number of data bytes in sector: Usually 253 except for last sector
 
 # ATR2IMD
 
