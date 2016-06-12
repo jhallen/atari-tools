@@ -264,9 +264,19 @@ first directory entry which has never been used (flag byte bits 6 and 7 both
 
 Data sectors:
 * 0..124:   Contain data
-* 125: File number in upper 6 bits.  Upper 2 bits of next  sector number in lower two bits.
+* 125: File number in upper 6 bits.  Upper 2 bits of next sector number in lower two bits.
 * 126: Lower 8 bits of next sector number.
 * 127: Number of data bytes in sector: Usually 125 except for last sector
+
+File data is stored as a linked-list of sectors.  Each sector has the next sector
+number embedded in it.  Each sector has the file number, which is just the
+index to the directory entry which owns the file.
+
+Unlike some file systems, for example CP/M, the exact file size is known
+since each sector has a byte indicating the number of used bytes in it.
+
+According to (Inside Atari DOS)[http://www.atariarchives.org/iad/], any
+sector can be short, not just the last.
 
 ### DOS 2.5 Enhanced density
 
@@ -340,6 +350,11 @@ Data sectors:
 * 253: File number in upper 6 bits.  Upper 2 bits of next  sector number in lower two bits.
 * 254: Lower 8 bits of next sector number.
 * 255: Number of data bytes in sector: Usually 253 except for last sector
+
+### Boot sectors
+
+See (Inside Atari DOS - The Boot Process)[http://www.atariarchives.org/iad/chapter20.php]
+for details.
 
 # ATR2IMD
 
