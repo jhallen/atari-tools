@@ -1,9 +1,12 @@
 # Atari Disk Tools
 
 [TOC]
-[ATR](#ATR)
-[ATR2IMD](#ATR2IMD)
-[IMD2ATR](#IMD2ATR)
+
+[ATR](#atr)
+
+[ATR2IMD](#atr2imd)
+
+[IMD2ATR](#imd2atr)
 
 Use ATR to manipulate .atr disk image files.
 
