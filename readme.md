@@ -1,19 +1,27 @@
 # Atari Disk Tools
 
-[TOC]
 
 [ATR](#atr)
+
 [  Image Formats](#image-formats)
-[  Compiling instructions](#compiling-instructions-1)
-[  Syntax](#syntax-1)
+
+[  Compiling instructions](#atr-compiling-instructions)
+
+[  Syntax](#atr-syntax)
+
 [  Commands](#commands)
+
 [ATR2IMD](#atr2imd)
 
 [IMD2ATR](#imd2atr)
-[  Compiling instructions](#compiling-instructions-2)
+
+[  Compiling instructions](#imd2atr-compiling-instructions)
+
 [detok](#detok)
-[  Compiling instructions](#compiling-instructions-3)
-[  Syntax](#syntax-2)
+
+[  Compiling instructions](#detok-compiling-instructions)
+
+[  Syntax](#detok-syntax)
 
 Use ATR to manipulate .atr disk image files.
 
@@ -60,11 +68,11 @@ normally be 183,952 bytes (16 byte .atr header + 40 track * 18 sectors per
 track * 256 bytes per sector - 384 bytes because first three sectors are
 short).
 
-## Compiling instructions
+## ATR Compiling instructions
 
 	cc -o atr atr.c
 
-## Syntax
+## ATR Syntax
 
 	atr path-to-diskette command [options] args
 
@@ -187,7 +195,7 @@ Kennedy's .ATR (Atari) disk image file format.
 You could use this to read Atari 800 disks using an IBM PC floppy
 drive with ImageDisk.
 
-## Compiling instructions
+## ATR Compiling instructions
 
 I use the DJGPP 32-bit GNU-C based compiler: http://www.delorie.com/djgpp/
 (so you need a 386 or better machine to run these on)
@@ -209,17 +217,17 @@ extender disables itself if it sees the DPMI provided by Windows):
 
 	copy /b CWSDSTUB.EXE+atr2imd atr2imd.exe
 
-# detok
+# DETOK
 
 This utility converts Mac65 tokenized assembly language source file into
 ASCII and prints the result on the standard output.
 
 
-## Compile
+## DETOK Compiling instructions
 
 	cc -o detok detok.c
 
-## Syntax
+## DETOK Syntax
 
 	detok source.m65
 
