@@ -2,11 +2,11 @@
 
 [TOC]
 
-[ATR](#atr)
+[ATR](##atr)
 
-[ATR2IMD](#atr2imd)
+[ATR2IMD](##atr2imd)
 
-[IMD2ATR](#imd2atr)
+[IMD2ATR](##imd2atr)
 
 Use ATR to manipulate .atr disk image files.
 
