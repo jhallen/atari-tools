@@ -2,11 +2,13 @@
 
 [TOC]
 
-[ATR](##atr)
+[ATR](#atr)
 
-[ATR2IMD](##atr2imd)
+[ATR2IMD](#atr2imd)
 
-[IMD2ATR](##imd2atr)
+[IMD2ATR](#imd2atr)
+
+[detok](#detok)
 
 Use ATR to manipulate .atr disk image files.
 
@@ -16,7 +18,7 @@ using ImageDisk.
 
 Use detok to convert .m65 tokenized assembly source files to ASCII.
 
-## ATR
+# ATR
 
 Manipulate .atr disk image files.  Allows you to read, write or
 delete files in .atr disk images.
@@ -163,7 +165,7 @@ Example of 'check':
 	  It's OK.
 	All done.
 
-## ATR2IMD
+# ATR2IMD
 
 Convert Nick Kennedy's .ATR (Atari) disk image file format to
 Dave Dunfield's .IMD (ImageDisk) file format
@@ -172,7 +174,7 @@ You could use this to write Atari 800 disks using an IBM PC floppy
 drive with ImageDisk.  Note however that the floppy drive should be adjusted
 for 288 RPM instead of 300 RPM.
 
-## IMD2ATR
+# IMD2ATR
 
 Convert Dave Dunfield's .IMD (ImageDisk) disk image file format to Nick
 Kennedy's .ATR (Atari) disk image file format.
@@ -202,7 +204,7 @@ extender disables itself if it sees the DPMI provided by Windows):
 
 	copy /b CWSDSTUB.EXE+atr2imd atr2imd.exe
 
-## detok
+# detok
 
 This utility converts Mac65 tokenized assembly language source file into
 ASCII and prints the result on the standard output.
