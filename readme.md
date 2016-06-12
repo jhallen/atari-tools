@@ -355,6 +355,12 @@ Data sectors:
 
 See [Inside Atari DOS - The Boot Process](http://www.atariarchives.org/iad/chapter20.php).
 
+DOS 2.0s and DOS 2.0d use the same boot sectors, except that the BLDISP (at
+offset $11 of the first boot sector) "Displacement in Sector to Sector Link"
+is $7D for DOS 2.0s, but $FD for DOS 2.0d.
+
+DOS 2.5 boot sectors have more differences.
+
 # ATR2IMD
 
 Convert Nick Kennedy's .ATR (Atari) disk image file format to
