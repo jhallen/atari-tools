@@ -6,6 +6,7 @@
   * [Compiling instructions](#atr-compiling-instructions)<br>
   * [Syntax](#atr-syntax)<br>
   * [Commands](#commands)<br>
+  * [ATR header format](#atr-header-format)<br>
   * [Filesystem technical descriptions](#filesystem-format)<br>
 * [ATR2IMD](#atr2imd)<br>
 * [IMD2ATR](#imd2atr)<br>
@@ -168,6 +169,53 @@ Example of 'check':
 	Compare VTOC bitmap with reconstructed bitmap from files...
 	  It's OK.
 	All done.
+
+## ATR header format
+
+Copied from "Structure of an SIO2PC Atari disk image" in:
+
+[readme.txt](http://pages.suddenlink.net/wa5bdu/readme.txt)
+
+WORD = special code* indicating this is an Atari disk file
+
+* The "code" is the 16 bit sum of the individual ASCII values of the 
+string of bytes: "NICKATARI". If you try to load a file without this first 
+WORD, you get a "THIS FILE IS NOT AN ATARI DISK FILE" error 
+message.
+
+WORD = size of this disk image, in paragraphs (size/16)
+
+WORD = sector size. (128 or 256) bytes/sector
+
+WORD = high part of size, in paragraphs (added by REV 3.00)
+
+BYTE = disk flags such as copy protection and write protect; see copy 
+protection chapter.
+
+WORD = 1st (or typical) bad sector; see copy protection chapter.
+SPARES 5 unused (spare) header bytes (contain zeroes)
+
+After the header comes the disk image. This is just a continuous string of 
+bytes, with the first 128 bytes being the contents of disk sector 1, the 
+second being sector 2, etc.
+
+Note however that for 256 bytes per sector disks, the format is ambiguous.  
+The issue is that the first three sectors use only 128 bytes, even though
+there are 256 bytes on the disk.  This has lead to three different formats:
+
+* Logical - Only 128 bytes are supplied in each of the first three sectors
+* Physical - The first three sectors contains all 256 bytes as on the disk
+* Weird - There are three 128 byte sectors, then three 128 byte sectors of zeros
+
+To determine which of these you have you need to follow this procedure:
+
+1. Check the file size (ignoring the 16-byte header).  If it's evenly
+divisible for 128, but not 256 then you have the Logical format.
+
+2. If it's evenly divisible by 256, then you have either the Physical or Weird
+formats.  To distinguish between them, check byte 384-767.  If they are all
+zeros, you probably have the Weird format, otherwise you have the Physical
+format.
 
 ## Filesystem format
 
