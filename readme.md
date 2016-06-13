@@ -210,7 +210,7 @@ second being sector 2, etc.
 
 Note however that for 256 bytes per sector disks, the format is ambiguous.  
 The issue is that the first three sectors use only 128 bytes, even though
-there are 256 bytes on the disk.  This has lead to three different formats:
+there are 256 bytes on the disk.  This has led to three different formats:
 
 * Logical - Only 128 bytes are supplied in each of the first three sectors
 * Physical - The first three sectors contains all 256 bytes as on the disk
