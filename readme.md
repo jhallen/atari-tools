@@ -131,7 +131,7 @@ Example of 'ls -al', shows full details:
 
 Example of 'check':
 
-	./atr "Osaplus Pro 2.12.atr" ls -a
+	./atr "Osaplus Pro 2.12.atr" check
 
 	Checking dos.sys (file_no 0)
 	  Found 44 sectors
@@ -228,7 +228,7 @@ format.
 
 ## Filesystem format
 
-### DOS 2.0S single density
+### DOS 2.0s single density
 
 40 tracks, 18 sectors, 128 byte sectors: 92160 bytes
 
