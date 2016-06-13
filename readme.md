@@ -62,7 +62,7 @@ short).
 
 ## ATR Compiling instructions
 
-	cc -o atr atr.c
+	make
 
 ## ATR Syntax
 
@@ -82,11 +82,18 @@ short).
                                     Copy file from diskette to local-name
                   -l to convert line ending from 0x9b to 0x0a
 
+      x [-a]                        Extract all files
+                  -a to include system files
+
       put [-l] local-name [atari-name]
                                     Copy file from local-name to diskette
                   -l to convert line ending from 0x0a to 0x9b
 
+      w names...                    Write all named files to diskette
+
       free                          Print amount of free space
+
+      mv old-name new-name          Rename a file
 
       rm atari-name                 Delete a file
 

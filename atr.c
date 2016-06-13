@@ -659,7 +659,7 @@ void putname(struct dirent *d, char *name)
 /* Find a file, return number of its first sector */
 /* If del is set, mark directory for deletion */
 
-int find_file(char *filename, int del)
+int find_file(char *filename, int del, char *new_name)
 {
         unsigned char buf[DD_SECTOR_SIZE];
         int x, y;
@@ -679,6 +679,10 @@ int find_file(char *filename, int del)
                                 if (!strcmp(s, filename)) {
                                         if (del) {
                                                 d->flag = 0x80;
+                                                putsect(buf, x);
+                                        }
+                                        if (new_name) {
+                                                putname(d, new_name);
                                                 putsect(buf, x);
                                         }
                                         return (d->start_hi << 8) + d->start_lo;
@@ -741,7 +745,7 @@ void read_file(int sector, FILE *f)
 
 void cat(char *name)
 {
-        int sector = find_file(name, 0);
+        int sector = find_file(name, 0, NULL);
         if (sector == -1) {
                 fprintf(stderr,"File '%s' not found\n", name);
                 exit(-1);
@@ -755,7 +759,7 @@ void cat(char *name)
 
 int get_file(char *atari_name, char *local_name)
 {
-        int sector = find_file(atari_name, 0);
+        int sector = find_file(atari_name, 0, NULL);
         if (sector == -1) {
                 fprintf(stderr,"File '%s' not found\n", atari_name);
                 return -1;
@@ -829,7 +833,7 @@ int del_file(int sector)
 
 int rm(char *name, int ignore)
 {
-        int first_sect = find_file(name, 1);
+        int first_sect = find_file(name, 1, NULL);
         if (first_sect != -1) {
                 if (del_file(first_sect)) {
                         fprintf(stderr,"Error deleting file '%s'\n", name);
@@ -1260,6 +1264,17 @@ int put_file(char *local_name, char *atari_name)
         return status;
 }
 
+/* Rename a file */
+
+int atari_rename(char *old_name, char *new_name)
+{
+        if (find_file(new_name, 0, NULL) != -1) {
+                fprintf(stderr, "'%s' already exists\n", new_name);
+                return -1;
+        }
+        return find_file(old_name, 0, new_name);
+}
+
 /* Get info about file: actual size, etc. */
 
 void get_info(struct name *nam)
@@ -1355,21 +1370,15 @@ void get_info(struct name *nam)
         }
 }
 
-#define FLUSHLINE do { \
-        if (strlen(linebuf) + 15 >= 78) { \
-                int n; \
-                printf("%s\n", linebuf); \
-                for (n = 0; n != ofst; ++n) linebuf[n] = ' '; \
-                linebuf[n] = 0; \
-        } \
-} while (0)
+/* Read directory into names/name_n array
+ * If info_flg is set, read file to measure it real length
+ * If all_flg is set, included system files in
+ */
 
-void atari_dir(int all, int full, int single)
+void read_dir(int all_flg, int info_flg)
 {
         unsigned char buf[DD_SECTOR_SIZE];
-        int x, y;
-        int rows;
-        int cols = (80 / 13);
+        int x;
         for (x = SECTOR_DIR; x != SECTOR_DIR + SECTOR_DIR_SIZE; ++x) {
                 int y;
                 if (getsect(buf, x)) {
@@ -1379,7 +1388,6 @@ void atari_dir(int all, int full, int single)
                 for (y = 0; y != SECTOR_SIZE; y += ENTRY_SIZE) {
                         struct dirent *d = (struct dirent *)(buf + y);
 
-                        /* OSS OS/A+ disks put junk after first never used directory entry */
                         if (!(d->flag & (FLAG_IN_USE | FLAG_DELETED)))
                                 goto done;
 
@@ -1396,27 +1404,39 @@ void atari_dir(int all, int full, int single)
                                 nam->sects = d->count_lo + (d->count_hi * 256);
                                 nam->segments = 0;
                                 nam->size = -1;
-                                get_info(nam);
+                                if (info_flg)
+                                        get_info(nam);
 
                                 if (d->suffix[0] == 'S' && d->suffix[1] == 'Y' && d->suffix[2] == 'S')
                                         nam->is_sys = 1;
                                 else
                                         nam->is_sys = 0;
 
-                              //  printf("\nName=%s\n", nam->name);
-                              //  printf("Starting sector=%d\n", nam->sector);
-                              //  printf("Size in sectors=%d, %d bytes\n", nam->sects, nam->sects * SECTOR_SIZE);
-                                // printf("load size=%d sectors, %d bytes\n", nam->size, (nam->size - 1) * SECTOR_SIZE + nam->last_size);
-                                // printf("Initial pc=%x\n", nam->pc);
-                                // printf("Load addr=%x\n", nam->load);
-                                // printf("Last_size=%d\n", nam->last_size);
-
-                                if ((all || !nam->is_sys))
+                                if ((all_flg || !nam->is_sys))
                                         names[name_n++] = nam;
                         }
                 }
         }
-        done:
+        done:;
+}
+
+#define FLUSHLINE do { \
+        if (strlen(linebuf) + 15 >= 78) { \
+                int n; \
+                printf("%s\n", linebuf); \
+                for (n = 0; n != ofst; ++n) linebuf[n] = ' '; \
+                linebuf[n] = 0; \
+        } \
+} while (0)
+
+void atari_dir(int all, int full, int single)
+{
+        unsigned char buf[DD_SECTOR_SIZE];
+        int x, y;
+        int rows;
+        int cols = (80 / 13);
+        read_dir(all, 1);
+
         qsort(names, name_n, sizeof(struct name *), (int (*)(const void *, const void *))comp);
 
         if (full) {
@@ -1488,6 +1508,85 @@ void atari_dir(int all, int full, int single)
         }
 }
 
+int mkfs(char *disk_name, int type)
+{
+        unsigned char hdr[16];
+        unsigned char bf[256];
+        unsigned char bitmap[ED_BITMAP_SIZE];
+        int size;
+        int n;
+        disk = fopen(disk_name, "w+");
+        if (!disk) {
+                fprintf(stderr, "Couldn't open '%s'\n", disk_name);
+                return -1;
+        }
+        /* .ATR header */
+        memset(hdr, 0, 16);
+        hdr[0] = 0x96;
+        hdr[1] = 0x02;
+        switch (type) {
+                case 1: {
+                        disk_size = SD_DISK_SIZE;
+                        size = 40*18*128;
+                        hdr[2] = size/16;
+                        hdr[3] = size/16/256;
+                        hdr[4] = 0x80;
+                        hdr[5] = 0x00;
+                        break;
+                } case 2: {
+                        disk_size = ED_DISK_SIZE;
+                        size = 40*26*128;
+                        hdr[2] = size/16;
+                        hdr[3] = size/16/256;
+                        hdr[4] = 0x80;
+                        hdr[5] = 0x00;
+                        break;
+                } case 3: {
+                        disk_size = DD_DISK_SIZE;
+                        set_density(1);
+                        size = 40*18*256 - 3*128;
+                        hdr[2] = size/16;
+                        hdr[3] = size/16/256;
+                        hdr[4] = 0x00;
+                        hdr[5] = 0x01;
+                        break;
+                }
+        }
+        if (16 != fwrite(hdr, 1, 16, disk)) {
+                fprintf(stderr, "Couldn't write to '%s'\n", disk_name);
+                return -1;
+        }
+        memset(bf, 0, 256);
+        for (n = 0; n != size; n += 128) {
+                if (128 != fwrite(bf, 1, 128, disk)) {
+                        fprintf(stderr, "Couldn't write to '%s'\n", disk_name);
+                        return -1;
+                }
+        }
+        /* VTOC */
+        bf[0] = 2;
+        if (disk_size == ED_DISK_SIZE) {
+                bf[1] = (255 & 1010);
+                bf[2] = 1010/256;
+        } else {
+                bf[1] = (255 & 707);
+                bf[2] = 707/256;
+        }
+        putsect(bf, SECTOR_VTOC);
+        memset(bitmap, 0xFF, ED_BITMAP_SIZE);
+        mark_space(bitmap, 0, 1); /* Sector zero */
+        mark_space(bitmap, 1, 1); /* Boot sectors */
+        mark_space(bitmap, 2, 1);
+        mark_space(bitmap, 3, 1);
+        mark_space(bitmap, SECTOR_VTOC, 1); /* VTOC */
+        for (n = 0; n != SECTOR_DIR_SIZE; ++n) /* DIR */
+                mark_space(bitmap, SECTOR_DIR + n, 1);
+        mark_space(bitmap, 720, 1); /* Reserved */
+        putmap(bitmap);
+        fclose(disk);
+        return 0;
+}
+
 int main(int argc, char *argv[])
 {
         int all = 0;
@@ -1512,10 +1611,14 @@ int main(int argc, char *argv[])
                 printf("      get [-l] atari-name [local-name]\n");
                 printf("                                    Copy file from diskette to local-name\n");
                 printf("                  -l to convert line ending from 0x9b to 0x0a\n\n");
+                printf("      x [-a]                        Extract all files\n");
+                printf("                  -a to include system files\n\n");
                 printf("      put local-name [atari-name]\n");
                 printf("                                    Copy file from local-name to diskette\n");
                 printf("                  -l to convert line ending from 0x0a to 0x9b\n\n");
+                printf("      w names...                    Write all named files to diskette\n\n");
                 printf("      free                          Print amount of free space\n\n");
+                printf("      mv old-name new-name          Rename a file\n\n");
                 printf("      rm atari-name                 Delete a file\n\n");
                 printf("      check                         Check filesystem (read only)\n\n");
                 printf("      fix                           Check and fix filesystem (prompts\n");
@@ -1524,14 +1627,10 @@ int main(int argc, char *argv[])
                 return -1;
 	}
 	disk_name = argv[x++];
+
 	if (argv[x] && !strcmp(argv[x], "mkfs")) {
 	        /* Create a filesystem */
 	        int type = 0;
-	        int size;
-	        int n;
-	        unsigned char hdr[16];
-	        unsigned char bf[256];
-	        unsigned char bitmap[ED_BITMAP_SIZE];
 	        ++x;
 	        if (argv[x] && !strcmp(argv[x], "dos2.0s"))
 	                type = 1;
@@ -1543,82 +1642,17 @@ int main(int argc, char *argv[])
                         fprintf(stderr, "Unknown format\n");
                         return -1;
                 }
-                disk = fopen(disk_name, "w+");
-                if (!disk) {
-                        fprintf(stderr, "Couldn't open '%s'\n", disk_name);
-                        return -1;
-                }
-                /* .ATR header */
-                memset(hdr, 0, 16);
-                hdr[0] = 0x96;
-                hdr[1] = 0x02;
-                switch (type) {
-                        case 1: {
-                                disk_size = SD_DISK_SIZE;
-                                size = 40*18*128;
-                                hdr[2] = size/16;
-                                hdr[3] = size/16/256;
-                                hdr[4] = 0x80;
-                                hdr[5] = 0x00;
-                                break;
-                        } case 2: {
-                                disk_size = ED_DISK_SIZE;
-                                size = 40*26*128;
-                                hdr[2] = size/16;
-                                hdr[3] = size/16/256;
-                                hdr[4] = 0x80;
-                                hdr[5] = 0x00;
-                                break;
-                        } case 3: {
-                                disk_size = DD_DISK_SIZE;
-                                set_density(1);
-                                size = 40*18*256 - 3*128;
-                                hdr[2] = size/16;
-                                hdr[3] = size/16/256;
-                                hdr[4] = 0x00;
-                                hdr[5] = 0x01;
-                                break;
-                        }
-                }
-                if (16 != fwrite(hdr, 1, 16, disk)) {
-                        fprintf(stderr, "Couldn't write to '%s'\n", disk_name);
-                        return -1;
-                }
-                memset(bf, 0, 256);
-                for (n = 0; n != size; n += 128) {
-                        if (128 != fwrite(bf, 1, 128, disk)) {
-                                fprintf(stderr, "Couldn't write to '%s'\n", disk_name);
-                                return -1;
-                        }
-                }
-                /* VTOC */
-                bf[0] = 2;
-                if (disk_size == ED_DISK_SIZE) {
-                        bf[1] = (255 & 1010);
-                        bf[2] = 1010/256;
-                } else {
-                        bf[1] = (255 & 707);
-                        bf[2] = 707/256;
-                }
-                putsect(bf, SECTOR_VTOC);
-                memset(bitmap, 0xFF, ED_BITMAP_SIZE);
-                mark_space(bitmap, 0, 1); /* Sector zero */
-                mark_space(bitmap, 1, 1); /* Boot sectors */
-                mark_space(bitmap, 2, 1);
-                mark_space(bitmap, 3, 1);
-                mark_space(bitmap, SECTOR_VTOC, 1); /* VTOC */
-                for (n = 0; n != SECTOR_DIR_SIZE; ++n) /* DIR */
-                        mark_space(bitmap, SECTOR_DIR + n, 1);
-                mark_space(bitmap, 720, 1); /* Reserved */
-                putmap(bitmap);
-                fclose(disk);
-                return 0;
+                return mkfs(disk_name, type);
 	}
+
+	/* Open disk image */
 	disk = fopen(disk_name, "r+");
 	if (!disk) {
 	        fprintf(stderr, "Couldn't open '%s'\n", disk_name);
 	        return -1;
 	}
+
+	/* Determine image type */
 	if (fseek(disk, 0, SEEK_END)) {
 	        fprintf(stderr, "Couldn't seek disk?\n");
 	        return -1;
@@ -1709,6 +1743,21 @@ int main(int argc, char *argv[])
                 if (x + 1 != argc)
                         local_name = argv[++x];
                 return get_file(atari_name, local_name);
+        } else if (!strcmp(argv[x], "x")) {
+                int all_flg = 0;
+                int status = 0;
+                int n;
+                ++x;
+                if (x != argc && !strcmp(argv[x], "-a")) {
+                        all_flg = 1;
+                        ++x;
+                }
+                read_dir(all_flg, 0);
+                for (n = 0; n != name_n; ++n) {
+                        printf("extracting %s\n", names[n]->name);
+                        status |= get_file(names[n]->name, names[n]->name);
+                }
+                return status;
         } else if (!strcmp(argv[x], "put")) {
                 char *local_name;
                 char *atari_name;
@@ -1730,6 +1779,34 @@ int main(int argc, char *argv[])
                 if (x + 1 != argc)
                         atari_name = argv[++x];
                 return put_file(local_name, atari_name);
+        } else if (!strcmp(argv[x], "w")) {
+                int status = 0;
+                ++x;
+                while (argv[x]) {
+                        printf("writing %s\n", argv[x]);
+                        status |= put_file(argv[x], argv[x]);
+                        ++x;
+                }
+                return status;
+        } else if (!strcmp(argv[x], "mv")) {
+                char *old_name;
+                char *new_name;
+                ++x;
+                if (!argv[x]) {
+                        fprintf(stderr,"missing name\n");
+                        return -1;
+                } else {
+                        old_name = argv[x];
+                        ++x;
+                }
+                if (!argv[x]) {
+                        fprintf(stderr,"missing name\n");
+                        return -1;
+                } else {
+                        new_name = argv[x];
+                        ++x;
+                }
+                return atari_rename(old_name, new_name);
         } else if (!strcmp(argv[x], "rm")) {
                 char *name;
                 ++x;
