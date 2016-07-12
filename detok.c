@@ -283,13 +283,13 @@ int main(int argc, char *argv[])
             if (typ == 0) {
                 printf("%s", tok);
             } else if (typ == 1) {
-                printf("%s%4.4x", tok, (int)src[idx] + ((int)src[idx + 1]));
+                printf("%s%4.4X", tok, (int)src[idx] + 256 * ((int)src[idx + 1]));
                 idx += 2; len -= 2;
             } else if (typ == 2) {
-                printf("%s%2.2x", tok, (int)src[idx]);
+                printf("%s%2.2X", tok, (int)src[idx]);
                 idx += 1; len -= 1;
             } else if (typ == 3) {
-                printf("%s%d", tok, (int)src[idx] + ((int)src[idx + 1]));
+                printf("%s%d", tok, (int)src[idx] + 256 * ((int)src[idx + 1]));
                 idx += 2; len -= 2;
             } else if (typ == 4) {
                 printf("%s%d", tok, (int)src[idx]);
