@@ -184,8 +184,8 @@ struct dirent {
         unsigned char count_hi;
         unsigned char start_lo;
         unsigned char start_hi;
-	unsigned char name[8];
-	unsigned char suffix[3];
+        unsigned char name[8];
+        unsigned char suffix[3];
 };
 
 /* Size of a directory entry */
@@ -1583,20 +1583,20 @@ int mkfs(char *disk_name, int type, char* boot_sectors_file_path)
                 mark_space(bitmap, SECTOR_DIR + n, 1);
         mark_space(bitmap, 720, 1); /* Reserved */
         putmap(bitmap);
-	if (boot_sectors_file_path != NULL) {
-		FILE* boot_sectors_file = fopen(boot_sectors_file_path, "rb");
-		if (!boot_sectors_file) {
-			fprintf(stderr, "Couldn't open '%s'\n", boot_sectors_file_path);
-			return -1;
-		}
-		n=0;
-		while (n++, !feof(boot_sectors_file)) {
-			size = ( n < 3 ? SECTOR_SIZE : sector_size);
-			size = fread(bf, size, 1, boot_sectors_file);
-			putsect(bf, n);
-		}
-		fclose(boot_sectors_file);
-	}
+        if (boot_sectors_file_path != NULL) {
+                FILE* boot_sectors_file = fopen(boot_sectors_file_path, "rb");
+                if (!boot_sectors_file) {
+                        fprintf(stderr, "Couldn't open '%s'\n", boot_sectors_file_path);
+                        return -1;
+                }
+                n=0;
+                while (n++, !feof(boot_sectors_file)) {
+                        size = ( n < 3 ? SECTOR_SIZE : sector_size);
+                        size = fread(bf, size, 1, boot_sectors_file);
+                        putsect(bf, n);
+                }
+                fclose(boot_sectors_file);
+        }
         fclose(disk);
         return 0;
 }
@@ -1607,10 +1607,10 @@ int main(int argc, char *argv[])
         int full = 0;
         int single = 0;
         long size;
-	int x;
-	char *disk_name;
-	x = 1;
-	if (x == argc || !strcmp(argv[x], "--help") || !strcmp(argv[x], "-h")) {
+        int x;
+        char *disk_name;
+        x = 1;
+        if (x == argc || !strcmp(argv[x], "--help") || !strcmp(argv[x], "-h")) {
                 printf("\nAtari DOS 2.0s, DOS 2.0d and DOS 2.5 diskette access\n");
                 printf("\n");
                 printf("Syntax: atr path-to-diskette [command] [args]\n");
@@ -1638,18 +1638,18 @@ int main(int argc, char *argv[])
                 printf("      fix                           Check and fix filesystem (prompts\n");
                 printf("                                    for each fix).\n\n");
                 printf("      mkfs dos2.0s|dos2.0d|dos2.5 [file with boot sectors]\n");
-								printf("                                    Write a new filesystem\n");
+                printf("                                    Write a new filesystem\n");
                 return -1;
-	}
-	disk_name = argv[x++];
+        }
+        disk_name = argv[x++];
 
-	if (argv[x] && !strcmp(argv[x], "mkfs")) {
-	        /* Create a filesystem */
-	        int type = 0;
-					char* boot_sectors_file_path = NULL;
-	        ++x;
-	        if (argv[x] && !strcmp(argv[x], "dos2.0s"))
-	                type = 1;
+        if (argv[x] && !strcmp(argv[x], "mkfs")) {
+                /* Create a filesystem */
+                int type = 0;
+                char* boot_sectors_file_path = NULL;
+                ++x;
+                if (argv[x] && !strcmp(argv[x], "dos2.0s"))
+                        type = 1;
                 else if (argv[x] && !strcmp(argv[x], "dos2.5"))
                         type = 2;
                 else if (argv[x] && !strcmp(argv[x], "dos2.0d"))
@@ -1658,71 +1658,71 @@ int main(int argc, char *argv[])
                         fprintf(stderr, "Unknown format\n");
                         return -1;
                 }
-								if (argc > x) {
-									// file containing bootsectors specified
-									boot_sectors_file_path = argv[x+1];
-								}
+                if (argc > x) {
+                        // file containing bootsectors specified
+                        boot_sectors_file_path = argv[x+1];
+                }
                 return mkfs(disk_name, type, boot_sectors_file_path);
-	}
+        }
 
-	/* Open disk image */
-	disk = fopen(disk_name, "r+");
-	if (!disk) {
-	        fprintf(stderr, "Couldn't open '%s'\n", disk_name);
-	        return -1;
-	}
+        /* Open disk image */
+        disk = fopen(disk_name, "r+");
+        if (!disk) {
+                fprintf(stderr, "Couldn't open '%s'\n", disk_name);
+                return -1;
+        }
 
-	/* Determine image type */
-	if (fseek(disk, 0, SEEK_END)) {
-	        fprintf(stderr, "Couldn't seek disk?\n");
-	        return -1;
-	}
-	size = ftell(disk);
+        /* Determine image type */
+        if (fseek(disk, 0, SEEK_END)) {
+                fprintf(stderr, "Couldn't seek disk?\n");
+                return -1;
+        }
+        size = ftell(disk);
 //	if (size - 16 == 40 * 18 * 128) {
         if (size - 16 < 1024 * 128) {
                 /* Minimum size for enhanced density is 1024 sectors */
                 /* Anything less: assume single-density */
-	        /* printf("Single density DOS 2.0S disk assumed\n"); */
-	        disk_size = SD_DISK_SIZE;
+                /* printf("Single density DOS 2.0S disk assumed\n"); */
+                disk_size = SD_DISK_SIZE;
 //	} else if (size - 16 == 40 * 26 * 128) {
         } else if (size - 16 < 128*3 + 256*717) {
                 /* Minimum size of double density is 3 128 byte sectors + 717 256 byte sectors */
                 /* Anything less: assume enhanced density */
-	        /* printf("Enhanced density DOS 2.5 disk assumed\n"); */
-	        disk_size = ED_DISK_SIZE;
+                /* printf("Enhanced density DOS 2.5 disk assumed\n"); */
+                disk_size = ED_DISK_SIZE;
         } else if (size - 16 == 128*3 + 256*717) {
                 disk_size = SD_DISK_SIZE;
                 set_density(1);
                 /* printf("Double density DOS 2.0D disk assumed\n"); */
-	} else {
-	        printf("Unknown disk size.  Expected:\n");
-	        printf("  .ATR header is 16 bytes, so:\n");
-	        printf("  16 + 40*18*128 = 92,176 bytes for DOS 2.0s single density\n");
-	        printf("  16 + 40*26*128 = 133,136 bytes for DOS 2.5 enhanced density\n");
-	        printf("  16 + 40*18*256 - 3*128 = 183,952 bytes for DOS 2.0d double density\n");
-	        return -1;
-	}
+        } else {
+                printf("Unknown disk size.  Expected:\n");
+                printf("  .ATR header is 16 bytes, so:\n");
+                printf("  16 + 40*18*128 = 92,176 bytes for DOS 2.0s single density\n");
+                printf("  16 + 40*26*128 = 133,136 bytes for DOS 2.5 enhanced density\n");
+                printf("  16 + 40*18*256 - 3*128 = 183,952 bytes for DOS 2.0d double density\n");
+                return -1;
+        }
 
-	/* Directory options */
-	dir:
-	while (x != argc && argv[x][0] == '-') {
-	        int y;
-	        for (y = 1;argv[x][y];++y) {
-	                int opt = argv[x][y];
-	                switch (opt) {
-	                        case 'l': full = 1; break;
-	                        case 'a': all = 1; break;
-	                        case '1': single = 1; break;
-	                        default: printf("Unknown option '%c'\n", opt); return -1;
-	                }
-	        }
-	        ++x;
-	}
+        /* Directory options */
+        dir:
+        while (x != argc && argv[x][0] == '-') {
+                int y;
+                for (y = 1;argv[x][y];++y) {
+                        int opt = argv[x][y];
+                        switch (opt) {
+                                case 'l': full = 1; break;
+                                case 'a': all = 1; break;
+                                case '1': single = 1; break;
+                                default: printf("Unknown option '%c'\n", opt); return -1;
+                        }
+                }
+                ++x;
+        }
 
-	if (x == argc) {
-	        /* Just print a directory listing */
-	        atari_dir(all, full, single);
-	        return status;
+        if (x == argc) {
+                /* Just print a directory listing */
+                atari_dir(all, full, single);
+                return status;
         } else if (!strcmp(argv[x], "ls")) {
                 ++x;
                 goto dir;
@@ -1733,24 +1733,24 @@ int main(int argc, char *argv[])
         } else if (!strcmp(argv[x], "fix")) {
                 fix = 1;
                 return do_check();
-	} else if (!strcmp(argv[x], "cat")) {
-	        ++x;
-	        if (x != argc && !strcmp(argv[x], "-l")) {
+        } else if (!strcmp(argv[x], "cat")) {
+                ++x;
+                if (x != argc && !strcmp(argv[x], "-l")) {
                         cvt_ending = 1;
                         ++x;
                 }
-	        if (x == argc) {
-	                fprintf(stderr,"Missing file name to cat\n");
-	                return -1;
-	        } else {
-	                cat(argv[x++]);
-	                return status;
-	        }
-	} else if (!strcmp(argv[x], "get")) {
+                if (x == argc) {
+                        fprintf(stderr,"Missing file name to cat\n");
+                        return -1;
+                } else {
+                        cat(argv[x++]);
+                        return status;
+                }
+        } else if (!strcmp(argv[x], "get")) {
                 char *local_name;
                 char *atari_name;
                 ++x;
-	        if (x != argc && !strcmp(argv[x], "-l")) {
+                if (x != argc && !strcmp(argv[x], "-l")) {
                         cvt_ending = 1;
                         ++x;
                 }
@@ -1782,7 +1782,7 @@ int main(int argc, char *argv[])
                 char *local_name;
                 char *atari_name;
                 ++x;
-	        if (x != argc && !strcmp(argv[x], "-l")) {
+                if (x != argc && !strcmp(argv[x], "-l")) {
                         cvt_ending = 1;
                         ++x;
                 }
@@ -1837,9 +1837,9 @@ int main(int argc, char *argv[])
                         name = argv[x];
                 }
                 return rm(name, 0);
-	} else {
-	        printf("Unknown command '%s'\n", argv[x]);
-	        return -1;
-	}
-	return 0;
+        } else {
+                printf("Unknown command '%s'\n", argv[x]);
+                return -1;
+        }
+        return 0;
 }
