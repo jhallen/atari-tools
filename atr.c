@@ -1508,7 +1508,7 @@ void atari_dir(int all, int full, int single)
         }
 }
 
-int mkfs(char *disk_name, int type)
+int mkfs(char *disk_name, int type, char* boot_sectors_file_path)
 {
         unsigned char hdr[16];
         unsigned char bf[256];
@@ -1583,6 +1583,20 @@ int mkfs(char *disk_name, int type)
                 mark_space(bitmap, SECTOR_DIR + n, 1);
         mark_space(bitmap, 720, 1); /* Reserved */
         putmap(bitmap);
+	if (boot_sectors_file_path != NULL) {
+		FILE* boot_sectors_file = fopen(boot_sectors_file_path, "rb");
+		if (!boot_sectors_file) {
+			fprintf(stderr, "Couldn't open '%s'\n", boot_sectors_file_path);
+			return -1;
+		}
+		n=0;
+		while (n++, !feof(boot_sectors_file)) {
+			size = ( n < 3 ? SECTOR_SIZE : sector_size);
+			size = fread(bf, size, 1, boot_sectors_file);
+			putsect(bf, n);
+		}
+		fclose(boot_sectors_file);
+	}
         fclose(disk);
         return 0;
 }
@@ -1623,7 +1637,8 @@ int main(int argc, char *argv[])
                 printf("      check                         Check filesystem (read only)\n\n");
                 printf("      fix                           Check and fix filesystem (prompts\n");
                 printf("                                    for each fix).\n\n");
-                printf("      mkfs dos2.0s|dos2.0d|dos2.5   Write a new filesystem\n");
+                printf("      mkfs dos2.0s|dos2.0d|dos2.5 [file with boot sectors]\n");
+								printf("                                    Write a new filesystem\n");
                 return -1;
 	}
 	disk_name = argv[x++];
@@ -1631,6 +1646,7 @@ int main(int argc, char *argv[])
 	if (argv[x] && !strcmp(argv[x], "mkfs")) {
 	        /* Create a filesystem */
 	        int type = 0;
+					char* boot_sectors_file_path = NULL;
 	        ++x;
 	        if (argv[x] && !strcmp(argv[x], "dos2.0s"))
 	                type = 1;
@@ -1642,7 +1658,11 @@ int main(int argc, char *argv[])
                         fprintf(stderr, "Unknown format\n");
                         return -1;
                 }
-                return mkfs(disk_name, type);
+								if (argc > x) {
+									// file containing bootsectors specified
+									boot_sectors_file_path = argv[x+1];
+								}
+                return mkfs(disk_name, type, boot_sectors_file_path);
 	}
 
 	/* Open disk image */
