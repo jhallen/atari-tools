@@ -280,7 +280,7 @@ FILE *disk;
 int getsect(unsigned char *buf, int sect)
 {
         int offset;
-        int size;
+        size_t size;
 
         if (!sect) {
                 fprintf(stderr,"Oops, tried to read sector 0\n");
@@ -317,7 +317,7 @@ int getsect(unsigned char *buf, int sect)
 void putsect(unsigned char *buf, int sect)
 {
         int offset;
-        int size;
+        size_t size;
 
         if (!sect) {
                 fprintf(stderr,"Oops, requested sector 0\n");
@@ -568,7 +568,7 @@ int comp(struct name **l, struct name **r)
 int find_empty_entry()
 {
         unsigned char buf[DD_SECTOR_SIZE];
-        int x, y;
+        int x;
         for (x = SECTOR_DIR; x != SECTOR_DIR + SECTOR_DIR_SIZE; ++x) {
                 int y;
                 if (getsect(buf, x)) {
@@ -662,7 +662,7 @@ void putname(struct dirent *d, char *name)
 int find_file(char *filename, int del, char *new_name)
 {
         unsigned char buf[DD_SECTOR_SIZE];
-        int x, y;
+        int x;
         for (x = SECTOR_DIR; x != SECTOR_DIR + SECTOR_DIR_SIZE; ++x) {
                 int y;
                 if (getsect(buf, x)) {
@@ -724,8 +724,8 @@ void read_file(int sector, FILE *f)
                 file_no = ((buf[data_file_num] >> 2) & 0x3F);
                 bytes = buf[data_bytes];
 
-                // printf("Sector %d: next=%d, bytes=%d, file_no=%d, short=%d\n",
-                //        sector, next, bytes, file_no, short_sect);
+                /* printf("Sector %d: next=%d, bytes=%d, file_no=%d, short=%d\n",
+                        sector, next, bytes, file_no, short_sect); */
                 
                 if (cvt_ending) {
                         int x;
@@ -818,7 +818,7 @@ int del_file(int sector)
                 file_no = ((buf[data_file_num] >> 2) & 0x3F);
                 bytes = buf[data_bytes];
 
-                // printf("Sector %d: next=%d, bytes=%d, file_no=%d, short=%d\n", sector, next, bytes, file_no, short_sect);
+                /* printf("Sector %d: next=%d, bytes=%d, file_no=%d, short=%d\n", sector, next, bytes, file_no, short_sect); */
 
                 mark_space(bitmap, sector, 0);
 
@@ -971,7 +971,7 @@ int do_check()
 {
         unsigned char bitmap[ED_BITMAP_SIZE];
         unsigned char buf[DD_SECTOR_SIZE];
-        int x, y;
+        int x;
         int total;
         int ok;
         int found_eod = 0;
@@ -1037,7 +1037,6 @@ int do_check()
                         fixes = 1;
                 }
         }
-        done:
         total = 0;
         for (x = 0; x != disk_size; ++x) {
                 if (map[x] != -1) {
@@ -1119,10 +1118,9 @@ int alloc_space(unsigned char *bitmap, int *list, int sects)
 
 /* Write a file */
 
-int write_file(unsigned char *bitmap, char *buf, int sects, int file_no, int size)
+int write_file(unsigned char *bitmap, unsigned char *buf, int sects, int file_no, int size)
 {
         int x;
-        int first_sect;
         unsigned char bf[DD_SECTOR_SIZE];
         int list[ED_DISK_SIZE];
         memset(list, 0, sizeof(list));
@@ -1281,10 +1279,8 @@ void get_info(struct name *nam)
 {
         unsigned char bigbuf[65536 * 2];
         unsigned char membuf[65536];
-        int total = 0;
+        size_t total = 0;
         int sector = nam->sector;
-        unsigned char bf[6];
-        int ptr = 0;
         struct segment *lastseg = 0;
         do {
                 unsigned char buf[DD_SECTOR_SIZE];
@@ -1320,7 +1316,7 @@ void get_info(struct name *nam)
 
         // Look at file...
         if (total >= 2 && bigbuf[0] == 0xFF && bigbuf[1] == 0xFF) { /* Magic number for binary file */
-                int idx;
+                size_t idx;
                 int ok = 1;
                 int segsize;
                 for (idx = 0; ok && idx < total; idx += segsize) {
@@ -1431,7 +1427,6 @@ void read_dir(int all_flg, int info_flg)
 
 void atari_dir(int all, int full, int single)
 {
-        unsigned char buf[DD_SECTOR_SIZE];
         int x, y;
         int rows;
         int cols = (80 / 13);
