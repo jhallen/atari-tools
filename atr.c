@@ -1634,9 +1634,10 @@ int main(int argc, char *argv[])
                 printf("      get [-l] atari-name [local-name]\n");
                 printf("                                    Copy file from diskette to local-name\n");
                 printf("                  -l to convert line ending from 0x9b to 0x0a\n\n");
-                printf("      x [-ao] [list]                Extract all files\n");
+                printf("      x [-aol] [list]               Extract all files\n");
                 printf("                  -a to include system files\n");
                 printf("                  -o OUTDIR extract to output director\n");
+                printf("                  -l to convert line endings from 0x9b to 0x0a\n");
                 printf("                  list is a space separated list of files to extract\n\n");
                 printf("      put local-name [atari-name]\n");
                 printf("                                    Copy file from local-name to diskette\n");
@@ -1785,6 +1786,8 @@ int main(int argc, char *argv[])
                     if ('-' == argv[x][0]) {
                         if (!strcmp(argv[x], "-a")) {
                             all_flg = 1;
+                        } else if(!strcmp(argv[x], "-l")) {
+                            cvt_ending = 1;
                         } else if(!strcmp(argv[x], "-o")) {
                             ++x;
                             if (x != argc) {
