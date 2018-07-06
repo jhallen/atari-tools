@@ -1596,6 +1596,20 @@ int mkfs(char *disk_name, int type, char* boot_sectors_file_path)
         return 0;
 }
 
+int should_extract(char* filename, int list_start, int argc, char* argv[])
+{
+    int i;
+    if (!list_start) {
+        return 1;   //  no list
+    }
+    for (i = list_start; i < argc; ++i) {
+        if(!strcmp(filename, argv[i])) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 int main(int argc, char *argv[])
 {
         int all = 0;
@@ -1620,8 +1634,11 @@ int main(int argc, char *argv[])
                 printf("      get [-l] atari-name [local-name]\n");
                 printf("                                    Copy file from diskette to local-name\n");
                 printf("                  -l to convert line ending from 0x9b to 0x0a\n\n");
-                printf("      x [-a]                        Extract all files\n");
-                printf("                  -a to include system files\n\n");
+                printf("      x [-aol] [list]               Extract all files\n");
+                printf("                  -a to include system files\n");
+                printf("                  -o OUTDIR extract to output director\n");
+                printf("                  -l to convert line endings from 0x9b to 0x0a\n");
+                printf("                  list is a space separated list of files to extract\n\n");
                 printf("      put local-name [atari-name]\n");
                 printf("                                    Copy file from local-name to diskette\n");
                 printf("                  -l to convert line ending from 0x0a to 0x9b\n\n");
@@ -1761,16 +1778,48 @@ int main(int argc, char *argv[])
         } else if (!strcmp(argv[x], "x")) {
                 int all_flg = 0;
                 int status = 0;
+                int list_start = 0;
+                char* out_dir = NULL;
                 int n;
-                ++x;
-                if (x != argc && !strcmp(argv[x], "-a")) {
-                        all_flg = 1;
-                        ++x;
+                char* out_filename;
+                while (++x != argc) {
+                    if ('-' == argv[x][0]) {
+                        if (!strcmp(argv[x], "-a")) {
+                            all_flg = 1;
+                        } else if(!strcmp(argv[x], "-l")) {
+                            cvt_ending = 1;
+                        } else if(!strcmp(argv[x], "-o")) {
+                            ++x;
+                            if (x != argc) {
+                                out_dir = argv[x];
+                            }
+                        }
+                    } else {
+                        list_start = x;
+                        break;
+                    }
                 }
                 read_dir(all_flg, 0);
                 for (n = 0; n != name_n; ++n) {
+                        if (!should_extract(names[n]->name, list_start, argc, argv)) {
+                            continue;
+                        }
+                        if (out_dir) {
+                            int out_dir_len = strlen(out_dir);
+                            out_filename = (char*)malloc(out_dir_len + strlen(names[n]->name) + 2);
+                            strcat(out_filename, out_dir);
+                            if ('/' != out_dir[out_dir_len - 1]) {
+                                strcat(out_filename, "/");
+                            }
+                            strcat(out_filename, names[n]->name);
+                        } else {
+                            out_filename = names[n]->name;
+                        }
                         printf("extracting %s\n", names[n]->name);
-                        status |= get_file(names[n]->name, names[n]->name);
+                        status |= get_file(names[n]->name, out_filename);
+                        if (out_dir) {
+                            free(out_filename);
+                        }
                 }
                 return status;
         } else if (!strcmp(argv[x], "put")) {
