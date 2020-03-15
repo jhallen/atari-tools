@@ -1403,7 +1403,7 @@ void read_dir(int all_flg, int info_flg)
                                 if (info_flg)
                                         get_info(nam);
 
-                                if (d->suffix[0] == 'S' && d->suffix[1] == 'Y' && d->suffix[2] == 'S')
+                                if (!strcmp(nam->name, "dos.sys") || !strcmp(nam->name, "dup.sys"))
                                         nam->is_sys = 1;
                                 else
                                         nam->is_sys = 0;
