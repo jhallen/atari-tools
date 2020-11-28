@@ -177,6 +177,8 @@ int disk_size = 720;
 #define FLAG_DOS2 0x02
 #define FLAG_OPENED 0x01
 
+#define FLAG_IN_USE_ED 0x41
+
 /* Directory entry */
 struct dirent {
         unsigned char flag;
@@ -577,7 +579,7 @@ int find_empty_entry()
                 }
                 for (y = 0; y != SECTOR_SIZE; y += ENTRY_SIZE) {
                         struct dirent *d = (struct dirent *)(buf + y);
-                        if (!(d->flag & FLAG_IN_USE)) {
+                        if (!(d->flag & FLAG_IN_USE_ED)) {
                                 return (x - SECTOR_DIR) * SECTOR_SIZE / ENTRY_SIZE + (y / ENTRY_SIZE);
                         }
                 }
@@ -672,9 +674,9 @@ int find_file(char *filename, int del, char *new_name)
                 for (y = 0; y != SECTOR_SIZE; y += ENTRY_SIZE) {
                         struct dirent *d = (struct dirent *)(buf + y);
                         /* OSS OS/A+ disks put junk after first never used directory entry */
-                        if (!(d->flag & (FLAG_IN_USE | FLAG_DELETED)))
+                        if (!(d->flag & (FLAG_IN_USE_ED | FLAG_DELETED)))
                                 goto done;
-                        if (d->flag & FLAG_IN_USE) {
+                        if (d->flag & FLAG_IN_USE_ED) {
                                 char *s = getname(d);
                                 if (!strcmp(s, filename)) {
                                         if (del) {
@@ -1018,10 +1020,10 @@ int do_check()
                 }
                 for (y = 0; y != SECTOR_SIZE; y += ENTRY_SIZE) {
                         struct dirent *d = (struct dirent *)(buf + y);
-                        if (!(d->flag & (FLAG_IN_USE | FLAG_DELETED))) {
+                        if (!(d->flag & (FLAG_IN_USE_ED | FLAG_DELETED))) {
                                 found_eod = 1;
                         }
-                        if (d->flag & FLAG_IN_USE) {
+                        if (d->flag & FLAG_IN_USE_ED) {
                                 if (found_eod == 1) {
                                         fprintf(stderr,"** Error: found in use directory entry after end of directory mark:\n");
                                         status = 1;
@@ -1097,11 +1099,13 @@ int do_check()
 
 int alloc_space(unsigned char *bitmap, int *list, int sects)
 {
+        int last_sector=4;
         while (sects) {
                 int x;
-                for (x = 1; x != disk_size; ++x) {
+                for (x = last_sector; x != disk_size; ++x) {
                         if (bitmap[x >> 3] & (1 << (7 - (x & 7)))) {
                                 *list++ = x;
+                                last_sector = x + 1;
                                 bitmap[x >> 3] &= ~(1 << (7 - (x & 7)));
                                 break;
                         }
@@ -1113,19 +1117,20 @@ int alloc_space(unsigned char *bitmap, int *list, int sects)
                 }
                 --sects;
         }
-        return 0;
+        return last_sector > 720;
 }
 
 /* Write a file */
 
 int write_file(unsigned char *bitmap, unsigned char *buf, int sects, int file_no, int size)
 {
-        int x;
+        int x, ed_file;
         unsigned char bf[DD_SECTOR_SIZE];
         int list[ED_DISK_SIZE];
         memset(list, 0, sizeof(list));
 
-        if (alloc_space(bitmap, list, sects))
+        ed_file = alloc_space(bitmap, list, sects);
+        if (ed_file == -1)
                 return -1;
 
         for (x = 0; x != sects; ++x) {
@@ -1145,7 +1150,7 @@ int write_file(unsigned char *bitmap, unsigned char *buf, int sects, int file_no
                 // printf("Writing sector %d %d %d %d\n", list[x], bf[125], bf[126], bf[127]);
                 putsect(bf, list[x]);
         }
-        return list[0];
+        return (ed_file == 1) ? -list[0] : list[0];
 }
 
 /* Write directory entry */
@@ -1154,6 +1159,12 @@ int write_dir(int file_no, char *name, int first_sect, int sects)
 {
         struct dirent d[1];
         unsigned char dir_buf[DD_SECTOR_SIZE];
+        int ed_file = 0;
+
+        if (first_sect < 0) {
+                first_sect = -first_sect;
+                ed_file = 1;
+        }
 
         /* Copy file name into directory entry */
         putname(d, name);
@@ -1163,7 +1174,7 @@ int write_dir(int file_no, char *name, int first_sect, int sects)
         d->count_hi = (sects >> 8);
         d->count_lo = sects;
         /* DOS complains on some file operations if FLAG_DOS2 is not there: */
-        d->flag = FLAG_IN_USE | FLAG_DOS2;
+        d->flag = (ed_file ? FLAG_OPENED : FLAG_IN_USE) | FLAG_DOS2;
         
         if (getsect(dir_buf, SECTOR_DIR + file_no / (SECTOR_SIZE / ENTRY_SIZE))) {
                 fprintf(stderr, " (trying to read directory)\n");
@@ -1384,10 +1395,10 @@ void read_dir(int all_flg, int info_flg)
                 for (y = 0; y != SECTOR_SIZE; y += ENTRY_SIZE) {
                         struct dirent *d = (struct dirent *)(buf + y);
 
-                        if (!(d->flag & (FLAG_IN_USE | FLAG_DELETED)))
+                        if (!(d->flag & (FLAG_IN_USE_ED | FLAG_DELETED)))
                                 goto done;
 
-                        if (d->flag & FLAG_IN_USE) {
+                        if (d->flag & FLAG_IN_USE_ED) {
                                 struct name *nam;
                                 char *s = getname(d);
                                 nam = (struct name *)malloc(sizeof(struct name));
@@ -1403,7 +1414,7 @@ void read_dir(int all_flg, int info_flg)
                                 if (info_flg)
                                         get_info(nam);
 
-                                if (d->suffix[0] == 'S' && d->suffix[1] == 'Y' && d->suffix[2] == 'S')
+                                if (!strcmp(nam->name, "dos.sys") || !strcmp(nam->name, "dup.sys"))
                                         nam->is_sys = 1;
                                 else
                                         nam->is_sys = 0;
